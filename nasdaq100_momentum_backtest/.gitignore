@@ -1,0 +1,10 @@
+# Per backtest_rules.md: do not check in data, results, logs, .venv
+data/
+results/
+logs/
+plots/
+outputs/
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

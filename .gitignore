@@ -1,0 +1,16 @@
+# Per backtest_rules.md: do not check in data, results, logs, .venv
+.venv/
+**/data/
+**/results/
+**/logs/
+**/plots/
+**/outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
