@@ -27,6 +27,37 @@ def _cache_path(ticker: str) -> str:
     return os.path.join(RAW_PRICES_DIR, f"{ticker.upper()}.csv")
 
 
+def _clean_price_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize a price DataFrame.
+
+    yfinance's newer versions sometimes return a column ``MultiIndex``
+    where the second level is the ticker symbol. When concatenated with
+    a cached single-level frame, the ticker labels can leak into a data
+    row (e.g. ``,AAPL,AAPL,AAPL,AAPL,AAPL``), poisoning the cache. This
+    helper guarantees:
+
+      * single-level columns
+      * ``DatetimeIndex`` named "Date" with no ``NaT`` rows
+      * required OHLCV columns coerced to numeric (junk rows dropped)
+      * deduped, sorted index
+    """
+    if df is None or df.empty:
+        return df
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.copy()
+        df.columns = df.columns.get_level_values(0)
+    df = df.rename_axis("Date")
+    df.index = pd.to_datetime(df.index, errors="coerce")
+    df = df[~df.index.isna()]
+    keep = [c for c in REQUIRED_COLUMNS if c in df.columns]
+    df = df[keep].copy()
+    for col in keep:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["Close"]) if "Close" in df.columns else df.dropna(how="all")
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    return df
+
+
 def _load_cached(ticker: str) -> Optional[pd.DataFrame]:
     """Load a cached price history for ``ticker`` if present."""
     path = _cache_path(ticker)
@@ -36,25 +67,26 @@ def _load_cached(ticker: str) -> Optional[pd.DataFrame]:
         df = pd.read_csv(path, index_col="Date", parse_dates=["Date"])
     except (ValueError, KeyError):
         return None
-    if df.empty:
+    df = _clean_price_frame(df)
+    if df is None or df.empty:
         return None
-    df = df[~df.index.duplicated(keep="last")].sort_index()
     return df
 
 
 def _cache_covers(df: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> bool:
-    """Return True when ``df`` spans at least [start, end - 5 business days].
+    """Return True when ``df`` extends through (roughly) ``end``.
 
-    A small tolerance allows for the cache to be reused even when the
-    most recent few sessions are missing (e.g. when the request reaches
-    near the present day).
+    We only enforce the end boundary: yfinance hands back at most the
+    earliest available print for each ticker, so re-downloading a
+    post-IPO name doesn't yield more history. The 3-day calendar
+    tolerance covers weekends/holidays so a cache produced on Friday
+    is still valid over the weekend.
     """
     if df.empty:
         return False
-    cached_start = df.index.min()
     cached_end = df.index.max()
-    end_tolerance = end - pd.Timedelta(days=5)
-    return cached_start <= start and cached_end >= end_tolerance
+    end_tolerance = end - pd.Timedelta(days=3)
+    return cached_end >= end_tolerance
 
 
 def _download_one(
@@ -86,15 +118,7 @@ def _download_one(
             time.sleep(1.0 * attempt)
             continue
 
-        # yfinance returns a multi-index when more than one ticker; for a
-        # single ticker we expect plain columns but handle both cases.
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        df = df.rename_axis("Date")
-        keep = [c for c in REQUIRED_COLUMNS if c in df.columns]
-        df = df[keep].dropna(how="all")
-        return df
+        return _clean_price_frame(df)
 
     LOGGER.error("All download attempts failed for %s", ticker)
     return None
@@ -144,7 +168,7 @@ def download_price_data(
             # Merge with any existing cache so we keep the broadest range.
             if cached is not None:
                 df = pd.concat([cached, df])
-                df = df[~df.index.duplicated(keep="last")].sort_index()
+            df = _clean_price_frame(df)
             df.to_csv(_cache_path(ticker), index_label="Date")
 
         # Restrict to the requested window for the returned panel.

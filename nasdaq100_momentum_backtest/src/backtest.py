@@ -115,7 +115,12 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         extras.add(secondary)
     all_tickers = sorted(set(universe_tickers) | extras)
 
-    prices = download_price_data(all_tickers, config.start_date, config.end_date)
+    prices = download_price_data(
+        all_tickers,
+        config.start_date,
+        config.end_date,
+        force_refresh=config.force_refresh,
+    )
     LOGGER.info(
         "Downloaded %d trading days for %d tickers",
         len(prices),
