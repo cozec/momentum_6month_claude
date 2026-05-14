@@ -37,5 +37,9 @@ jobs:
           EMAIL_TO:          ${{ secrets.EMAIL_TO }}
           MOMENTUM_API_BASE: ${{ secrets.MOMENTUM_API_BASE }}
           REFRESH:           "1"
+          # Render Free plan sleeps after 15 min idle. First request
+          # takes ~30 s wake + ~25 s download → keep the timeout
+          # generous so the wake doesn't trip exit 1.
+          HTTP_TIMEOUT:      "240"
           PYTHONUNBUFFERED:  "1"
         run: python send_picks_email.py
