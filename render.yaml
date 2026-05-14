@@ -18,9 +18,14 @@ services:
     rootDir: nasdaq100_momentum_backtest
     buildCommand: pip install -r requirements.txt
     startCommand: python run_webapp.py
-    healthCheckPath: /api/picks?lookback=6&period=1
+    # ``/health`` is a cheap probe that doesn't run a backtest;
+    # ``/api/picks`` would fire 100 yfinance downloads on a cold
+    # deploy and risk tripping Render's health-check timeout.
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: MOMENTUM_HOST
         value: 0.0.0.0
       - key: PYTHONUNBUFFERED

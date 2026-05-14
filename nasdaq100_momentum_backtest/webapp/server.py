@@ -42,6 +42,17 @@ def index() -> FileResponse:
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
+@app.get("/health")
+def health() -> Dict[str, str]:
+    """Cheap liveness probe — no backtest run, returns instantly.
+
+    Render's deploy health-check hits this; using ``/api/picks`` instead
+    would force a 30-60s yfinance fetch before the deploy is marked
+    healthy, which can trip the probe timeout.
+    """
+    return {"status": "ok"}
+
+
 def _safe_float(x: Any) -> Optional[float]:
     try:
         f = float(x)
