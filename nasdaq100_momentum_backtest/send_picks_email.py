@@ -61,7 +61,13 @@ STRATEGIES = [
 
 
 def _http_get(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "momentum-picks-email/1.0",
+        },
+    )
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
         return resp.read()
 
@@ -228,6 +234,11 @@ def _send_via_resend(subject: str, html: str, text: str) -> Dict[str, Any]:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {RESEND_API_KEY}",
+            # Resend sits behind Cloudflare. The default urllib UA
+            # (Python-urllib/x.y) trips Cloudflare's bot mitigation and
+            # returns 403 with error code 1010 before the request ever
+            # reaches Resend. Any non-default UA works.
+            "User-Agent": "momentum-picks-email/1.0",
         },
         method="POST",
     )
