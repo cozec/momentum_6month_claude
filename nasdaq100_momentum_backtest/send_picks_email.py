@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -59,10 +60,54 @@ STRATEGIES = [
 ]
 
 
-def _http_get_json(url: str) -> Dict[str, Any]:
+def _http_get(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
-        return json.loads(resp.read().decode())
+        return resp.read()
+
+
+# 502 / 503 / 504 are the classic wake-up gateway errors on Render's
+# Free plan: the proxy answers before the still-cold worker is ready.
+# Retrying after a short pause almost always succeeds.
+_RETRYABLE_STATUSES = {502, 503, 504}
+
+
+def _http_get_json(url: str, *, attempts: int = 4, backoff: float = 8.0) -> Dict[str, Any]:
+    last_err: Exception | None = None
+    for i in range(1, attempts + 1):
+        try:
+            return json.loads(_http_get(url).decode())
+        except urllib.error.HTTPError as e:
+            last_err = e
+            retryable = e.code in _RETRYABLE_STATUSES
+            sys.stderr.write(
+                f"[attempt {i}/{attempts}] HTTP {e.code} fetching {url}\n"
+            )
+            if not retryable or i == attempts:
+                raise
+        except (urllib.error.URLError, TimeoutError) as e:
+            last_err = e
+            sys.stderr.write(
+                f"[attempt {i}/{attempts}] transient error fetching {url}: {e}\n"
+            )
+            if i == attempts:
+                raise
+        time.sleep(backoff * i)  # 8s, 16s, 24s...
+    raise last_err  # unreachable
+
+
+def _warm_service() -> None:
+    """Pre-warm the web service so the heavy /api/picks call doesn't
+    hit a cold worker. /health returns instantly when the service is
+    live, so we burn the 30-60s wake-up window here instead of in
+    the expensive request."""
+    url = f"{API_BASE}/health"
+    sys.stderr.write(f"Warming {url}…\n")
+    try:
+        _http_get_json(url, attempts=8, backoff=10.0)
+        sys.stderr.write("Service is warm.\n")
+    except Exception as e:
+        sys.stderr.write(f"Warm-up gave up: {e}; proceeding anyway.\n")
 
 
 def _fetch_strategy(lookback: int, period: int) -> Dict[str, Any]:
@@ -205,6 +250,8 @@ def main() -> int:
     if missing:
         sys.stderr.write(f"Missing env vars: {', '.join(missing)}\n")
         return 1
+
+    _warm_service()
 
     try:
         data = [
