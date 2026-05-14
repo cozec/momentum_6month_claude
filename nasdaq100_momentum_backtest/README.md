@@ -2,6 +2,10 @@
 
 A Python backtesting tool that runs a monthly 6-month momentum rotation strategy on the Nasdaq-100 universe, benchmarked against QQQ.
 
+## Reference:
+https://www.xiaohongshu.com/explore/69fe40e30000000037037c0d?xsec_token=ABEtUGDxuYs9OY_3Aa3sxyRd1BAlYpUJgOeZagDNpkBIc=&xsec_source=pc_user
+
+
 ## Strategy
 
 On the first trading day of each month:
