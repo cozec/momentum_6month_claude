@@ -46,7 +46,7 @@ services:
     # by which point yfinance has the new first-trading-day's data.
     schedule: "0 22 1 * *"
     buildCommand: pip install -r requirements.txt
-    command: python send_picks_email.py
+    startCommand: python send_picks_email.py
     envVars:
       - key: RESEND_API_KEY
         sync: false        # set in dashboard
