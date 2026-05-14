@@ -115,6 +115,33 @@ python -m unittest discover tests
 
 Covered: monthly return calculation, momentum score correctness with both methods, the no-lookahead invariant, insufficient-history rejection, first-trading-day extraction, top-N selection, and equal-weight portfolio return arithmetic.
 
+## Live dashboard
+
+A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page that shows both strategies' current holdings and recent rebalances. Run locally:
+
+```bash
+source .venv/bin/activate
+cd nasdaq100_momentum_backtest
+python run_webapp.py        # → http://127.0.0.1:8765
+```
+
+## One-click deploy (Render.com + Resend)
+
+Free tier of [Render](https://render.com) hosts the dashboard, a Render Cron Job runs the monthly email, and [Resend](https://resend.com) (3,000 emails/month free) delivers it.
+
+1. Push to GitHub (already done if you cloned this repo).
+2. Render dashboard → **New → Blueprint** → connect this repo. Render reads [`render.yaml`](../render.yaml) at the repo root and creates:
+   - **`momentum-web`** — the FastAPI dashboard (Free plan, sleeps after 15 min idle).
+   - **`momentum-picks-email`** — a Cron Job firing at 22:00 UTC on the 1st of each month.
+3. After the first deploy, set these env vars on the cron job in the Render dashboard:
+   - `RESEND_API_KEY` — from [resend.com](https://resend.com/api-keys)
+   - `EMAIL_FROM` — a Resend-verified sender address (e.g. `picks@yourdomain.com`)
+   - `EMAIL_TO` — your recipient(s), comma-separated
+   - `MOMENTUM_API_BASE` — the web service URL Render shows you, e.g. `https://momentum-web-xyz.onrender.com`
+4. Trigger the cron manually once from the Render dashboard to verify you receive the email. The next run fires automatically on the 1st of the next month.
+
+The email body shows both strategies' open holdings with rank, MTD return, and entry/last prices — same data the dashboard surfaces.
+
 ## Caveats
 
 - Default universe is the **current** Nasdaq-100. Results are survivorship-biased and overstate the strategy's historical edge — winners like NVDA, AVGO, PLTR, MSTR, APP that were added in the 2020s were already present in the universe back in 2015.

@@ -1,0 +1,62 @@
+# Render Blueprint — one-click deploy of the momentum picks dashboard
+# + monthly email cron.
+#
+# How to deploy:
+#   1. Push this repo to GitHub (already done).
+#   2. https://dashboard.render.com → New → Blueprint → connect this repo.
+#   3. Render reads this file and creates both services on the Free plan.
+#   4. After first deploy, set these "sync:false" secrets in the dashboard:
+#        - momentum-picks-email.RESEND_API_KEY      (from https://resend.com)
+#        - momentum-picks-email.EMAIL_FROM          (a Resend-verified sender)
+#        - momentum-picks-email.EMAIL_TO            (your email)
+#        - momentum-picks-email.MOMENTUM_API_BASE   (the web service's URL,
+#                                                   e.g. https://momentum-web-xyz.onrender.com)
+#
+# The web service sleeps after 15 min idle on Free plan — first request
+# after sleep takes ~30s + the ~25s yfinance refresh. After that, cached
+# responses are < 1 s. The cron runs ``send_picks_email.py`` at 22:00 UTC
+# (≈ 5–6 pm ET) on the 1st of each month, which is shortly after the new
+# month's first-trading-day close — good timing to capture the fresh
+# rebalance picks.
+
+services:
+  # ─── public dashboard ───────────────────────────────────────────────────
+  - type: web
+    name: momentum-web
+    runtime: python
+    plan: free
+    rootDir: nasdaq100_momentum_backtest
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run_webapp.py
+    healthCheckPath: /api/picks?lookback=6&period=1
+    autoDeploy: true
+    envVars:
+      - key: MOMENTUM_HOST
+        value: 0.0.0.0
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+  # ─── monthly email job ──────────────────────────────────────────────────
+  - type: cron
+    name: momentum-picks-email
+    runtime: python
+    plan: free
+    rootDir: nasdaq100_momentum_backtest
+    # 22:00 UTC on the 1st of every month — ~1–2 hours after the US close,
+    # by which point yfinance has the new first-trading-day's data.
+    schedule: "0 22 1 * *"
+    buildCommand: pip install -r requirements.txt
+    command: python send_picks_email.py
+    envVars:
+      - key: RESEND_API_KEY
+        sync: false        # set in dashboard
+      - key: EMAIL_FROM
+        sync: false        # set in dashboard
+      - key: EMAIL_TO
+        sync: false        # set in dashboard
+      - key: MOMENTUM_API_BASE
+        sync: false        # set in dashboard to the web service's URL
+      - key: REFRESH
+        value: "1"         # force backend to re-download fresh prices
+      - key: PYTHONUNBUFFERED
+        value: "1"

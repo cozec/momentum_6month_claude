@@ -18,7 +18,8 @@ if HERE not in sys.path:
 
 def main() -> None:
     host = os.environ.get("MOMENTUM_HOST", "127.0.0.1")
-    port = int(os.environ.get("MOMENTUM_PORT", "8765"))
+    # Render / Heroku / Fly inject ``PORT``; fall through to the local default.
+    port = int(os.environ.get("PORT") or os.environ.get("MOMENTUM_PORT") or "8765")
     reload = os.environ.get("MOMENTUM_RELOAD", "0") == "1"
     uvicorn.run(
         "webapp.server:app",
