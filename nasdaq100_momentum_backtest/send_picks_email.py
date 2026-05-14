@@ -35,12 +35,23 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 
-API_BASE = os.environ.get("MOMENTUM_API_BASE", "http://127.0.0.1:8765").rstrip("/")
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
-EMAIL_FROM = os.environ.get("EMAIL_FROM")
-EMAIL_TO = os.environ.get("EMAIL_TO")
-FORCE_REFRESH = os.environ.get("REFRESH", "0") == "1"
-HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "120"))
+def _env(name: str, default: str = "") -> str:
+    """Read an env var and strip whitespace.
+
+    Copy-pasting secrets into the GitHub Actions UI commonly leaves a
+    trailing newline. ``urllib`` then rejects the value with
+    ``ValueError: Invalid header value`` when it's used in an
+    Authorization header, so we sanitize at the boundary.
+    """
+    return (os.environ.get(name) or default).strip()
+
+
+API_BASE = _env("MOMENTUM_API_BASE", "http://127.0.0.1:8765").rstrip("/")
+RESEND_API_KEY = _env("RESEND_API_KEY")
+EMAIL_FROM = _env("EMAIL_FROM")
+EMAIL_TO = _env("EMAIL_TO")
+FORCE_REFRESH = _env("REFRESH", "0") == "1"
+HTTP_TIMEOUT = int(_env("HTTP_TIMEOUT", "120"))
 
 STRATEGIES = [
     {"label": "Strategy A · L=6m / P=1m (baseline)", "lookback": 6, "period": 1},
