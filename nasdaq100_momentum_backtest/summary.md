@@ -44,6 +44,35 @@
 - **TQQQ is the asymmetric loser on drawdown.** -80% peak-to-trough means a $1M TQQQ position drops to $200k; recovering requires a +400% rally on what remains. This is the hidden cost behind TQQQ's superficially attractive +2,644% headline.
 - **No-friction caveat.** This run sets transaction cost = slippage = 0, so strategy returns are *gross* (pre-trading-cost). At ~72% average monthly turnover, a 10 bps round-trip would shave roughly 0.86% per year off the strategy's CAGR; a 20 bps round-trip would shave ~1.7%. QQQ and TQQQ buy-and-hold are essentially frictionless anyway.
 
+## Grid-search results (lookback × rebalance period)
+
+12 (lookback, period) combos, full window 2016–2026 plus a walk-forward split at **train_end = 2023-01-01** (≈ 6.5 y train / 3.3 y test). Returns are gross; benchmarks are the same as in the headline table. **Rows are ranked by full-period CAGR (highest first).** The top row — L=3m / P=2m — is also the IS, OOS, and full-period Sharpe winner.
+
+| Lookback | Period | Rebals | CAGR | Vol | Sharpe | Max DD | Total Return | IS Sharpe | OOS Sharpe |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **3m** | **2m** | **60** | **+97.84%** | **52.7%** | **1.58** | **-30.8%** | **91,780%** | **1.24** | **2.27** |
+| 3m | 3m | 40 | +84.27% | 69.0% | 1.18 | -47.6% | 45,042% | 0.91 | 1.72 |
+| 3m | 1m | 120 | +84.20% | 54.1% | 1.38 | -45.2% | 44,878% | 1.17 | 1.77 |
+| 6m | 1m | 117 | +83.42% | 51.6% | 1.43 | -36.5% | 36,927% | 1.06 | 2.04 |
+| 9m | 2m | 57 | +82.61% | 54.0% | 1.39 | -32.1% | 30,416% | 0.99 | 2.17 |
+| 6m | 3m | 39 | +81.05% | 62.0% | 1.25 | -26.3% | 32,526% | 1.00 | 1.79 |
+| 6m | 2m | 58 | +76.40% | 52.1% | 1.35 | -31.1% | 24,039% | 1.15 | 1.72 |
+| 9m | 1m | 114 | +76.02% | 54.2% | 1.30 | -35.5% | 21,422% | 1.00 | 1.76 |
+| 9m | 3m | 38 | +68.74% | 54.3% | 1.23 | -29.7% | 14,307% | 0.94 | 1.83 |
+| 12m | 1m | 111 | +46.33% | 49.0% | 1.00 | -41.4% | 3,283% | 0.66 | 1.48 |
+| 12m | 3m | 37 | +44.32% | 50.0% | 0.97 | -52.0% | 2,877% | 0.52 | 1.94 |
+| 12m | 2m | 55 | +32.32% | 47.9% | 0.80 | -44.8% | 1,203% | 0.53 | 1.34 |
+
+### Takeaways
+
+- **L=12m is consistently the worst** across every rebalance period (Sharpe 0.80–1.00, CAGR 32–46%). Six-month momentum is the textbook horizon and shorter still works; one year is too stale.
+- **The L∈{3,6,9}m × P∈{1,2,3}m sub-block clusters at Sharpe 1.18–1.58** — a flat plateau. Pick anything in that block and you get a similar profile, which is the robustness signal we wanted.
+- **No overfitting**: every combo's OOS Sharpe ≥ IS Sharpe (all 12 points plot above y=x in the walk-forward scatter). The IS winner (L3/P2) is also the OOS winner — no parameter cherry-picking advantage.
+- **Be skeptical of the OOS magnitudes.** The 2023-01 → 2026-05 OOS regime was a once-in-a-decade momentum tape (NVDA → MSTR → SNDK/WDC chain). 2.0+ Sharpes are not a forward expectation; they're a regime artifact.
+- **The headline run uses L=6m/P=1m** (defaults). The grid-best L=3m/P=2m is only ~0.15 Sharpe higher full-period and 1.0 OOS Sharpe higher — given the regime caveat above, the small full-period edge isn't enough to justify switching unless you also believe 3m signal will keep working forward.
+
+See [`outputs/grid_search/grid_results.csv`](outputs/grid_search/grid_results.csv) for raw numbers and [`outputs/charts/grid_full_sharpe.png`](outputs/charts/grid_full_sharpe.png), [`grid_walkforward_scatter.png`](outputs/charts/grid_walkforward_scatter.png) for the heatmap and IS-vs-OOS scatter.
+
 ## Debug audit ("75% CAGR — is it real?")
 
 Asked of the result. The answer breaks into two parts.

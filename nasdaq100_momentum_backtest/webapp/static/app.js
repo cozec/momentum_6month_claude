@@ -1,10 +1,11 @@
 /* Nasdaq-100 Momentum picks — frontend.
- * Pulls /api/picks on load, on the Refresh button, and on tab focus.
- * Adds ?refresh=1 when the user clicks Refresh so the backend re-downloads
- * the latest yfinance data instead of trusting the cache.
+ * Renders TWO strategies side-by-side on the page:
+ *   A: L=6m / P=1m  (baseline)
+ *   B: L=3m / P=2m  (grid-search winner)
+ * Both call /api/picks with the appropriate query params. Refresh button
+ * adds ?refresh=1 to both calls so the backend re-downloads fresh data.
  */
 
-// Tailwind-ish 500 shades, stable per ticker via hash.
 const ACCENT_PALETTE = [
   '#6366F1', '#10B981', '#F59E0B', '#EC4899', '#06B6D4',
   '#8B5CF6', '#EF4444', '#84CC16', '#0EA5E9', '#F97316',
@@ -24,22 +25,10 @@ function fmtPct(x, digits = 1) {
   return `${sign}${(x * 100).toFixed(digits)}%`;
 }
 
-function fmtPctMulti(x, digits = 0) {
-  // For total_return where values are already in fraction form like 369.x
-  if (x === null || x === undefined || Number.isNaN(x)) return '—';
-  return `${(x * 100).toFixed(digits)}%`;
-}
-
 function fmtDate(s) {
   if (!s) return '';
   const d = new Date(s + 'T00:00');
   return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
-}
-
-function fmtMonthLong(s) {
-  if (!s) return '';
-  const d = new Date(s + 'T00:00');
-  return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
 function fmtDay(s) {
@@ -51,7 +40,6 @@ function fmtDay(s) {
 function bgFromReturn(ret, maxAbs) {
   if (ret === null || ret === undefined) return '#FFFFFF';
   const intensity = Math.min(1, Math.pow(Math.abs(ret) / Math.max(maxAbs, 1e-9), 0.6));
-  // Mint #D1FADF for positive, rose #FEE2E2 for negative.
   const pos = [217, 250, 219];
   const neg = [254, 226, 226];
   const neutral = [248, 250, 252];
@@ -69,7 +57,6 @@ function pickCard(pick, opts = {}) {
   const border = isOpen ? 'border-2 border-dashed border-slate-400' : 'border border-slate-200';
 
   if (compact) {
-    // Slim single-line layout: ticker on the left, return on the right.
     const mtdSuffix = isOpen
       ? `<span class="ml-1 text-[9px] tracking-wider text-slate-400 uppercase">mtd</span>`
       : '';
@@ -86,7 +73,6 @@ function pickCard(pick, opts = {}) {
     `;
   }
 
-  // Full-size card (open holdings).
   const mtdBadge = isOpen
     ? `<span class="inline-block mt-2 text-[10px] font-semibold tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">MTD</span>`
     : '';
@@ -107,13 +93,13 @@ function pickCard(pick, opts = {}) {
   `;
 }
 
-function renderOpen(data) {
-  const grid = document.getElementById('open-grid');
-  const label = document.getElementById('open-entry-label');
-  const mtdLabel = document.getElementById('open-portfolio-mtd');
+function renderOpen(root, data) {
+  const grid = root.querySelector('[data-el="open-grid"]');
+  const label = root.querySelector('[data-el="open-entry-label"]');
+  const mtdLabel = root.querySelector('[data-el="open-portfolio-mtd"]');
   if (!data.open || data.open.length === 0) {
-    grid.innerHTML = `<div class="col-span-full p-8 text-center text-slate-500 italic">
-      No open rebalance — the latest holding period has already closed. Refresh after market data updates.
+    grid.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500 italic">
+      No open rebalance — the latest holding period has already closed.
     </div>`;
     label.textContent = '';
     mtdLabel.textContent = '';
@@ -122,9 +108,7 @@ function renderOpen(data) {
   const meta = data.open_meta || {};
   label.innerHTML = `entry ${fmtDay(meta.entry_date)} · MTD through ${fmtDay(meta.as_of)}`;
   const maxAbs = Math.max(...data.open.map(p => Math.abs(p.stock_return || 0)), 0.1);
-  grid.innerHTML = data.open
-    .map(p => pickCard(p, { isOpen: true, maxAbs }))
-    .join('');
+  grid.innerHTML = data.open.map(p => pickCard(p, { isOpen: true, maxAbs })).join('');
   if (meta.mtd_portfolio_return !== undefined && meta.mtd_portfolio_return !== null) {
     const v = meta.mtd_portfolio_return;
     const sign = v >= 0 ? 'text-emerald-700' : 'text-red-700';
@@ -133,7 +117,7 @@ function renderOpen(data) {
   }
 }
 
-function renderStats(data) {
+function renderStats(root, data) {
   const s = data.stats || {};
   const strat = s.strategy || {};
   const qqq = s.qqq || {};
@@ -144,35 +128,31 @@ function renderStats(data) {
       ${sub ? `<div class="text-xs text-slate-500 mt-1">${sub}</div>` : ''}
     </div>
   `;
-  const grid = document.getElementById('stats-grid');
+  const grid = root.querySelector('[data-el="stats-grid"]');
   grid.innerHTML = [
     card('CAGR',          fmtPct(strat.cagr),         `QQQ ${fmtPct(qqq.cagr)}`),
-    card('Sharpe',        (strat.sharpe ?? 0).toFixed(2), '(monthly, annualized)'),
+    card('Sharpe',        (strat.sharpe ?? 0).toFixed(2), '(annualized)'),
     card('Max drawdown',  fmtPct(strat.max_drawdown), `QQQ ${fmtPct(qqq.max_drawdown)}`),
-    card('Win vs QQQ',    fmtPct(strat.win_rate_vs_qqq), 'of months beat QQQ'),
+    card('Win vs QQQ',    fmtPct(strat.win_rate_vs_qqq), 'of rebalances beat QQQ'),
   ].join('');
 }
 
-function renderHistory(data) {
+function renderHistory(root, data) {
+  const list = root.querySelector('[data-el="history-list"]');
   const completed = data.completed || [];
-  const list = document.getElementById('history-list');
   if (!completed.length) {
-    list.innerHTML =
-      `<div class="text-slate-500 italic p-6">No completed rebalances yet.</div>`;
+    list.innerHTML = `<div class="text-slate-500 italic p-6">No completed rebalances yet.</div>`;
     return;
   }
-  // Group by date → array of picks (sorted by rank).
   const byDate = new Map();
   for (const p of completed) {
     if (!byDate.has(p.date)) byDate.set(p.date, []);
     byDate.get(p.date).push(p);
   }
-  const dates = [...byDate.keys()].sort().reverse();   // newest first
-  document.getElementById('history-count').textContent = dates.length;
+  const dates = [...byDate.keys()].sort().reverse();
+  root.querySelector('[data-el="history-count"]').textContent = dates.length;
 
-  const maxAbs = Math.max(
-    ...completed.map(p => Math.abs(p.stock_return || 0)), 0.1,
-  );
+  const maxAbs = Math.max(...completed.map(p => Math.abs(p.stock_return || 0)), 0.1);
 
   list.innerHTML = dates.map(date => {
     const picks = byDate.get(date).sort((a, b) => a.rank - b.rank);
@@ -191,10 +171,9 @@ function renderHistory(data) {
     `;
   }).join('');
 
-  // Window cumulative label.
   const w = data.window || {};
   const cumStratColor = (w.cum_strategy ?? 0) >= 0 ? 'text-emerald-700' : 'text-red-700';
-  document.getElementById('window-cum').innerHTML =
+  root.querySelector('[data-el="window-cum"]').innerHTML =
     `Strategy <span class="font-semibold ${cumStratColor}">${fmtPct(w.cum_strategy, 1)}</span>
      · QQQ <span class="font-medium text-slate-700">${fmtPct(w.cum_qqq, 1)}</span>`;
 }
@@ -208,6 +187,20 @@ function renderUpdated(data) {
   `;
 }
 
+async function loadStrategy(root, { refresh }) {
+  const lookback = root.dataset.lookback;
+  const period = root.dataset.period;
+  const params = new URLSearchParams({ lookback, period });
+  if (refresh) params.set('refresh', '1');
+  const resp = await fetch(`/api/picks?${params.toString()}`, { cache: 'no-store' });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} for L${lookback}/P${period}`);
+  const data = await resp.json();
+  renderOpen(root, data);
+  renderStats(root, data);
+  renderHistory(root, data);
+  return data;
+}
+
 async function load({ refresh = false } = {}) {
   const refreshBtn = document.getElementById('refresh-btn');
   const refreshLabel = document.getElementById('refresh-label');
@@ -219,14 +212,13 @@ async function load({ refresh = false } = {}) {
   refreshIcon.classList.add('animate-spin');
 
   try {
-    const url = '/api/picks' + (refresh ? '?refresh=1' : '');
-    const resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    renderOpen(data);
-    renderStats(data);
-    renderHistory(data);
-    renderUpdated(data);
+    const strategies = Array.from(document.querySelectorAll('.strategy'));
+    // Run them in parallel — backend cache shares the price download.
+    const results = await Promise.all(strategies.map(r => loadStrategy(r, { refresh })));
+    // Use the latest computed_at for the header timestamp.
+    const newest = results.reduce((acc, d) =>
+      (acc && acc.computed_at > d.computed_at ? acc : d), null);
+    if (newest) renderUpdated(newest);
   } catch (e) {
     err.textContent = `Failed to load picks: ${e.message}. Check that the server is running and Yahoo Finance is reachable.`;
     err.classList.remove('hidden');
@@ -239,11 +231,8 @@ async function load({ refresh = false } = {}) {
 }
 
 document.getElementById('refresh-btn').addEventListener('click', () => load({ refresh: true }));
-
-// First load uses the cache (fast). Manual refresh re-downloads.
 load({ refresh: false });
 
-// Re-poll if tab regains focus after >60 s.
 let lastLoaded = Date.now();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && Date.now() - lastLoaded > 60_000) {

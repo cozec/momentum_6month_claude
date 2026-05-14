@@ -140,6 +140,11 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         months=config.lookback_months + 1
     )
     rebalance_days = [d for d in first_days if d >= start_threshold]
+    # Hold each position for ``rebalance_period_months`` months — keep
+    # every Nth first-trading-day in the schedule.
+    period = max(1, int(config.rebalance_period_months))
+    if period > 1:
+        rebalance_days = [d for i, d in enumerate(rebalance_days) if i % period == 0]
     if len(rebalance_days) < 2:
         raise RuntimeError("Not enough rebalance dates after warm-up period.")
 

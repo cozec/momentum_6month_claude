@@ -56,6 +56,8 @@ def _safe_float(x: Any) -> Optional[float]:
 def api_picks(
     refresh: bool = Query(False, description="Re-download fresh prices"),
     history: int = Query(12, ge=1, le=120, description="Past months to return"),
+    lookback: int = Query(6, ge=1, le=24, description="Lookback months for momentum"),
+    period: int = Query(1, ge=1, le=12, description="Months between rebalances"),
 ) -> Dict[str, Any]:
     started = time.time()
     today = pd.Timestamp.now().normalize()
@@ -64,6 +66,8 @@ def api_picks(
         start_date="2016-01-01",
         end_date=today.strftime("%Y-%m-%d"),
         force_refresh=refresh,
+        lookback_months=lookback,
+        rebalance_period_months=period,
     )
     results = run_backtest(config)
     selections: pd.DataFrame = results["selections"]
@@ -81,7 +85,10 @@ def api_picks(
         selections["rebalance_date"].isin(completed_dates)
     ].sort_values(["rebalance_date", "rank"])
 
-    summary = calculate_summary_stats(portfolio)
+    summary = calculate_summary_stats(
+        portfolio,
+        periods_per_year=12.0 / max(1, period),
+    )
 
     # Cumulative return for just the requested history window.
     recent_pr = portfolio[portfolio["rebalance_date"].isin(completed_dates)]
@@ -136,6 +143,11 @@ def api_picks(
         "as_of": today.strftime("%Y-%m-%d"),
         "computed_at": datetime.now().isoformat(timespec="seconds"),
         "took_seconds": round(time.time() - started, 2),
+        "strategy": {
+            "lookback_months": lookback,
+            "rebalance_period_months": period,
+            "label": f"L={lookback}m / P={period}m",
+        },
         "completed": completed_payload,
         "open": open_payload,
         "open_meta": open_meta,

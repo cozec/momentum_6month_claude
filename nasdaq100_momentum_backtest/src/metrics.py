@@ -15,8 +15,17 @@ def _series_from(df: pd.DataFrame, col: str) -> pd.Series:
     return df.set_index("rebalance_date")[col].astype(float)
 
 
-def calculate_summary_stats(portfolio_returns: pd.DataFrame) -> pd.DataFrame:
-    """Compute summary statistics for the strategy and the benchmark."""
+def calculate_summary_stats(
+    portfolio_returns: pd.DataFrame,
+    periods_per_year: float = MONTHS_PER_YEAR,
+) -> pd.DataFrame:
+    """Compute summary statistics for the strategy and the benchmark.
+
+    ``periods_per_year`` is how many rebalances fit in a year. For
+    monthly rebalances it's 12; for bi-monthly it's 6; for quarterly
+    it's 4. The annualization of vol/Sharpe and the years-denominator
+    in CAGR both use this value.
+    """
     if portfolio_returns.empty:
         return pd.DataFrame()
 
@@ -29,20 +38,20 @@ def calculate_summary_stats(portfolio_returns: pd.DataFrame) -> pd.DataFrame:
 
     def _stats(returns: pd.Series, equity_col: str) -> Dict[str, float]:
         equity = df.set_index("rebalance_date")[equity_col].astype(float)
-        n_months = len(returns)
-        if n_months == 0:
+        n_periods = len(returns)
+        if n_periods == 0:
             return {}
         # equity[-1] is value AFTER the final period; compounding from
-        # initial capital over n_months holding periods gives the true
+        # initial capital over n_periods holding periods gives the true
         # total return. Using equity.iloc[0] here would be off-by-one
         # because that's already post-first-period.
         total_return = float((1.0 + returns).prod()) - 1.0
-        years = n_months / MONTHS_PER_YEAR
+        years = n_periods / periods_per_year
         cagr = (1.0 + total_return) ** (1.0 / years) - 1.0 if years > 0 else np.nan
-        vol = returns.std(ddof=1) * np.sqrt(MONTHS_PER_YEAR) if n_months > 1 else np.nan
+        vol = returns.std(ddof=1) * np.sqrt(periods_per_year) if n_periods > 1 else np.nan
         sharpe = (
-            returns.mean() / returns.std(ddof=1) * np.sqrt(MONTHS_PER_YEAR)
-            if n_months > 1 and returns.std(ddof=1) > 0
+            returns.mean() / returns.std(ddof=1) * np.sqrt(periods_per_year)
+            if n_periods > 1 and returns.std(ddof=1) > 0
             else np.nan
         )
         # Build a continuous equity series for drawdown so the first row
@@ -61,7 +70,7 @@ def calculate_summary_stats(portfolio_returns: pd.DataFrame) -> pd.DataFrame:
             "best_month": float(returns.max()),
             "worst_month": float(returns.min()),
             "total_return": total_return,
-            "number_of_rebalances": int(n_months),
+            "number_of_rebalances": int(n_periods),
         }
 
     strat = _stats(net_returns, "portfolio_value")

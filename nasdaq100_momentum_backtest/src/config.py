@@ -52,6 +52,7 @@ class BacktestConfig:
     top_n: int = 3
     lookback_months: int = 6
     rebalance_frequency: str = "monthly"
+    rebalance_period_months: int = 1
     benchmark: str = "QQQ"
     secondary_benchmark: str = "TQQQ"
     initial_capital: float = 100_000.0

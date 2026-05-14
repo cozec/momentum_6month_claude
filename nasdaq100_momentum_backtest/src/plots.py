@@ -411,6 +411,117 @@ def plot_recent_rebalances(
     return _save(fig, "recent_rebalances.png")
 
 
+def plot_grid_heatmap(
+    grid: pd.DataFrame,
+    value_col: str,
+    title: str,
+    filename: str,
+    fmt: str = "{:.2f}",
+    center_at_zero: bool = False,
+) -> str:
+    """Render a (lookback × rebalance-period) heatmap of ``value_col``."""
+    if grid.empty or value_col not in grid.columns:
+        fig, ax = plt.subplots(figsize=(6, 2))
+        ax.text(0.5, 0.5, f"No data for {value_col}", ha="center", va="center")
+        ax.axis("off")
+        return _save(fig, filename)
+
+    pivot = grid.pivot(index="lookback", columns="period", values=value_col)
+    pivot = pivot.sort_index().sort_index(axis=1)
+    values = pivot.values
+
+    fig, ax = plt.subplots(figsize=(2.2 + 1.1 * pivot.shape[1], 1.2 + 0.7 * pivot.shape[0]))
+    if center_at_zero:
+        absmax = np.nanmax(np.abs(values)) or 1.0
+        im = ax.imshow(
+            values, cmap="RdYlGn", aspect="auto",
+            vmin=-absmax, vmax=absmax,
+        )
+    else:
+        im = ax.imshow(values, cmap="RdYlGn", aspect="auto")
+
+    ax.set_xticks(range(pivot.shape[1]))
+    ax.set_xticklabels([f"{c}m" for c in pivot.columns], fontsize=11)
+    ax.set_yticks(range(pivot.shape[0]))
+    ax.set_yticklabels([f"{i}m" for i in pivot.index], fontsize=11)
+    ax.set_xlabel("Rebalance period", fontsize=11, color="#475569")
+    ax.set_ylabel("Lookback", fontsize=11, color="#475569")
+    ax.set_title(title, fontsize=13, fontweight="bold", color="#0F172A", pad=10)
+
+    for i in range(pivot.shape[0]):
+        for j in range(pivot.shape[1]):
+            v = values[i, j]
+            if np.isnan(v):
+                continue
+            ax.text(
+                j, i, fmt.format(v),
+                ha="center", va="center",
+                fontsize=11, fontweight="bold",
+                color="#0F172A",
+            )
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    fig.tight_layout()
+    return _save(fig, filename)
+
+
+def plot_walkforward_scatter(grid: pd.DataFrame, filename: str) -> str:
+    """Scatter of IS Sharpe vs OOS Sharpe across grid combos.
+
+    Points below the y=x line indicate overfitting (param looked good
+    in-sample but degraded out-of-sample). A tight cluster around the
+    identity line is the robustness signal we want.
+    """
+    if grid.empty or "is_sharpe" not in grid.columns or "oos_sharpe" not in grid.columns:
+        fig, ax = plt.subplots(figsize=(6, 2))
+        ax.text(0.5, 0.5, "No walk-forward data", ha="center", va="center")
+        ax.axis("off")
+        return _save(fig, filename)
+
+    valid = grid.dropna(subset=["is_sharpe", "oos_sharpe"]).copy()
+    fig, ax = plt.subplots(figsize=(7, 6))
+    is_winner_idx = valid["is_sharpe"].idxmax()
+
+    for _, row in valid.iterrows():
+        is_s, oos_s = row["is_sharpe"], row["oos_sharpe"]
+        is_winner = (row.name == is_winner_idx)
+        ax.scatter(
+            is_s, oos_s,
+            s=220 if is_winner else 140,
+            color="#10B981" if is_winner else "#6366F1",
+            edgecolor="white", linewidth=1.5,
+            zorder=3,
+        )
+        ax.annotate(
+            f"L{int(row['lookback'])}/P{int(row['period'])}",
+            (is_s, oos_s),
+            textcoords="offset points", xytext=(8, 8),
+            fontsize=10, color="#0F172A",
+        )
+
+    # y=x line + a "1.0 Sharpe" reference rectangle
+    lo = min(valid["is_sharpe"].min(), valid["oos_sharpe"].min()) - 0.3
+    hi = max(valid["is_sharpe"].max(), valid["oos_sharpe"].max()) + 0.3
+    ax.plot([lo, hi], [lo, hi], "--", color="#94A3B8", linewidth=1.2, label="y = x (no degradation)")
+    ax.axhline(0, color="#CBD5E1", linewidth=0.8)
+    ax.axvline(0, color="#CBD5E1", linewidth=0.8)
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_xlabel("In-sample Sharpe", fontsize=11, color="#475569")
+    ax.set_ylabel("Out-of-sample Sharpe", fontsize=11, color="#475569")
+    ax.set_title(
+        "Walk-forward: IS vs OOS Sharpe across (lookback, period) grid",
+        fontsize=13, fontweight="bold", color="#0F172A", pad=10,
+    )
+    ax.legend(loc="lower right", frameon=False, fontsize=10)
+    ax.grid(True, alpha=0.3)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    fig.tight_layout()
+    return _save(fig, filename)
+
+
 def generate_all_charts(
     portfolio_returns: pd.DataFrame,
     selections: pd.DataFrame,
