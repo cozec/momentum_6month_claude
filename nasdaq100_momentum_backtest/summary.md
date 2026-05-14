@@ -162,10 +162,24 @@ Of the 11 newly-added names, 7 ended up in the top-3 at least once over the real
 
 This correction also lifted the headline CAGR from 77.68% → **83.42%** because two of the additions (`INSM` and `SHOP`) had multi-bagger runs that the strategy successfully rotated into.
 
+## Live deployment
+
+The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers:
+
+| Piece | Service | Notes |
+|---|---|---|
+| Dashboard | Render Free web service (`momentum-web`) | Tailwind SPA showing Strategy A (L=6m/P=1m) and Strategy B (L=3m/P=2m) side-by-side. Sleeps after 15 min idle; first call ≈ 30 s wake + < 1 s after that. |
+| Monthly cron | GitHub Actions (`monthly-picks-email.yml`) | Fires at `0 22 1 * *` UTC. Pre-warms `/health`, fetches both strategies with `refresh=1`, builds an HTML+text email. |
+| Email delivery | Resend (3,000 / mo free) | Cloudflare-fronted; the script sends a non-default `User-Agent` so the POST isn't blocked with code 1010. |
+
+**Behaviour on the 1st of each month:** Strategy A rebalances (new picks scored on the new first-trading-day, MTD ≈ 0% on entry). Strategy B holds for two months, so on every *other* 1st it rolls; in between it just shows the same picks with an updated period-to-date return. The completed previous-month holding becomes a new row in the dashboard's "Past rebalances" feed and is reflected in the next email.
+
 ## Caveats
 
-1. **Survivorship bias** — current-constituents universe overstates strategy returns. To get a clean number, supply historical Nasdaq-100 membership in `data/nasdaq100_membership.csv` and run with `--use-historical-membership`. The QQQ and TQQQ buy-and-hold figures are not affected.
+1. **Survivorship bias** — current-constituents universe overstates strategy returns. To get a clean number, supply historical Nasdaq-100 membership in `data/nasdaq100_membership.csv` and run with `--use-historical-membership`. The QQQ and TQQQ buy-and-hold figures are not affected. The grid-search experiment quantified this: dropping post-2018 index additions cut the headline CAGR from ~78% to ~47% (a ~31 pp survivorship premium).
 2. **Leverage decay** — TQQQ resets exposure daily, so over multi-month windows the return is path-dependent and typically less than 3× the QQQ return. The realized -80% drawdown is the worst-case manifestation of that path dependence.
 3. **Concentration risk** — top-3 equal-weight is highly concentrated; the realized volatility reflects that.
-4. **Execution** — fills assumed at the first-day adjusted close with 10 bps round-trip cost. Real capacity, market impact, and tax effects are not modelled.
-5. **Data** — one ticker (`ANSS`) is missing post-acquisition history on Yahoo Finance and was excluded from the run.
+4. **Execution** — fills assumed at the first-day adjusted close with 0 bps friction. Real capacity, market impact, and tax effects are not modelled; at ~72%/mo turnover, a 10 bps round-trip would shave ~0.86 pp/yr off the CAGR.
+5. **Universe is a static hardcoded snapshot.** It was reconciled to 101 tickers (the universe correction section above) but Nasdaq-100 reconstitutions happen quarterly; refresh `CURRENT_NASDAQ100` in `src/config.py` periodically.
+
+

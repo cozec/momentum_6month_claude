@@ -23,7 +23,8 @@ nasdaq100_momentum_backtest/
     processed/
     nasdaq100_membership.csv    # current-snapshot membership (template)
   outputs/
-    charts/                     # generated PNGs
+    charts/                     # generated PNGs (equity curve, drawdown, etc.)
+    grid_search/                # grid_results.csv from the param sweep
     monthly_selections.csv
     portfolio_returns.csv
     summary_stats.csv
@@ -32,18 +33,31 @@ nasdaq100_momentum_backtest/
     download_data.py # yfinance downloader with on-disk caching
     membership.py    # constituent loader / template writer
     signals.py       # monthly returns, momentum scores, top-N select
-    backtest.py      # core monthly rebalance loop
+    backtest.py      # core monthly rebalance loop + compute_open_position
     metrics.py       # CAGR, vol, Sharpe, drawdown, win-rate, turnover
-    plots.py         # equity curve, drawdown, distribution, rolling, etc.
+    plots.py         # equity curve, drawdown, dist, rolling, grid heatmap, …
+    grid_search.py   # (lookback × period) sweep + walk-forward IS/OOS
     utils.py         # logging + filesystem helpers
+  webapp/            # FastAPI dashboard (Tailwind-styled SPA)
+    server.py        # /api/picks?lookback=&period= + /health
+    static/index.html, static/app.js
   tests/
     test_strategy.py # unit tests for signals + portfolio math
   notebooks/
     exploration.ipynb
-  main.py            # CLI entry point
+  main.py            # backtest CLI entry point
+  grid_search.py     # grid-search CLI entry point
+  run_webapp.py      # launches uvicorn (reads $PORT for Render/Heroku)
+  send_picks_email.py# monthly cron → HTML email via Resend
+  Procfile           # fallback for platforms that read it
   requirements.txt
   README.md
   summary.md
+  config.md          # data + realized window derivation
+
+# repo root (one level up)
+render.yaml          # Render Blueprint (web service only; cron lives in GH)
+.github/workflows/monthly-picks-email.yml
 ```
 
 ## Setup
@@ -115,15 +129,37 @@ python -m unittest discover tests
 
 Covered: monthly return calculation, momentum score correctness with both methods, the no-lookahead invariant, insufficient-history rejection, first-trading-day extraction, top-N selection, and equal-weight portfolio return arithmetic.
 
+## Grid search + walk-forward
+
+`grid_search.py` sweeps the (lookback × rebalance-period) grid and reports IS/OOS metrics:
+
+```bash
+source .venv/bin/activate
+cd nasdaq100_momentum_backtest
+python grid_search.py \
+    --lookbacks 3 6 9 12 \
+    --periods 1 2 3 \
+    --train-end 2023-01-01
+```
+
+Writes `outputs/grid_search/grid_results.csv` and four heatmaps + an IS-vs-OOS scatter under `outputs/charts/`. See the "Grid-search results" section of [`summary.md`](summary.md) for the headline 12-combo table and takeaways.
+
 ## Live dashboard
 
-A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page that shows both strategies' current holdings and recent rebalances. Run locally:
+A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page that shows **two strategies side-by-side**:
+
+- **Strategy A** — `L=6m / P=1m` (the project default / baseline).
+- **Strategy B** — `L=3m / P=2m` (the grid-search winner, kept on the page as an apples-to-apples comparison).
+
+Each section shows the current open holdings (with MTD return and "in progress" badge), summary stats (CAGR, Sharpe, max drawdown, win-rate vs QQQ), and a vertical feed of the last 12 completed rebalances. Run locally:
 
 ```bash
 source .venv/bin/activate
 cd nasdaq100_momentum_backtest
 python run_webapp.py        # → http://127.0.0.1:8765
 ```
+
+The page re-runs the backtest pipeline on every load; refresh button forces yfinance to re-download fresh prices. On the first trading day of a new month, Strategy A's open position rolls to a new entry; Strategy B holds for two months so it only rolls every second first-trading-day.
 
 ## One-click deploy (Render + GitHub Actions + Resend)
 
@@ -150,12 +186,18 @@ Render's Free plan doesn't include cron jobs, which is why the schedule lives in
 - The workflow at [`.github/workflows/monthly-picks-email.yml`](../.github/workflows/monthly-picks-email.yml) fires automatically at **22:00 UTC on the 1st of each month** (≈ 5–6 pm ET, just after the new month's first-trading-day close).
 
 **3. Smoke-test:**
-- GitHub → **Actions → Monthly picks email → Run workflow** → check that you receive the email within ~1 minute (longer if the Render web service is asleep — first call wakes it).
+- GitHub → **Actions → Monthly picks email → Run workflow** → check that you receive the email within ~1 minute (longer if the Render web service is asleep — `send_picks_email.py` pre-warms via `/health` and retries 502s, so wake-ups are absorbed).
 
 The email body shows both strategies' open holdings with rank, MTD return, and entry/last prices — same data the dashboard surfaces.
 
+**Gotchas the script already handles (so you don't have to):**
+
+- **Trailing whitespace in copy-pasted secrets** — env vars are stripped before use; `urllib`'s `Invalid header value` won't fire.
+- **Render Free-plan cold-start 502s** — `/health` is hit up to 8× with 10s backoff to warm the worker, and `/api/picks` retries on 502/503/504 with linear backoff.
+- **Cloudflare blocking `Python-urllib/*`** — Resend sits behind Cloudflare; the script sends a non-default `User-Agent` so the POST isn't rejected with `error code: 1010`.
+
 ## Caveats
 
-- Default universe is the **current** Nasdaq-100. Results are survivorship-biased and overstate the strategy's historical edge — winners like NVDA, AVGO, PLTR, MSTR, APP that were added in the 2020s were already present in the universe back in 2015.
-- One ticker (`ANSS`) may fail to download because Yahoo Finance dropped history after the 2025 acquisition; the run continues with the remaining 99 stocks.
+- Default universe is the **current** Nasdaq-100 (101 tickers with both Alphabet share classes). Results are survivorship-biased and overstate the strategy's historical edge — winners like NVDA, AVGO, PLTR, MSTR, APP, SNDK, WDC, SHOP, INSM, AXON that were added in the 2020s were already present in the universe back in 2015. The grid-search run quantifies this: dropping post-2018 additions cuts the headline CAGR from ~80% to ~47%.
+- The hardcoded universe is a static snapshot of the current Nasdaq-100. Index reconstitutions happen quarterly; refresh `CURRENT_NASDAQ100` in `src/config.py` periodically (or wire up a Wikipedia/Nasdaq fetcher) to keep current.
 - Execution assumes you trade at the first-day adjusted close with the configured cost/slippage. Real-world fills, capacity, and tax effects are not modelled.
