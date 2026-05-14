@@ -125,20 +125,32 @@ cd nasdaq100_momentum_backtest
 python run_webapp.py        # → http://127.0.0.1:8765
 ```
 
-## One-click deploy (Render.com + Resend)
+## One-click deploy (Render + GitHub Actions + Resend)
 
-Free tier of [Render](https://render.com) hosts the dashboard, a Render Cron Job runs the monthly email, and [Resend](https://resend.com) (3,000 emails/month free) delivers it.
+All three pieces have a free tier:
 
-1. Push to GitHub (already done if you cloned this repo).
-2. Render dashboard → **New → Blueprint** → connect this repo. Render reads [`render.yaml`](../render.yaml) at the repo root and creates:
-   - **`momentum-web`** — the FastAPI dashboard (Free plan, sleeps after 15 min idle).
-   - **`momentum-picks-email`** — a Cron Job firing at 22:00 UTC on the 1st of each month.
-3. After the first deploy, set these env vars on the cron job in the Render dashboard:
-   - `RESEND_API_KEY` — from [resend.com](https://resend.com/api-keys)
-   - `EMAIL_FROM` — a Resend-verified sender address (e.g. `picks@yourdomain.com`)
-   - `EMAIL_TO` — your recipient(s), comma-separated
-   - `MOMENTUM_API_BASE` — the web service URL Render shows you, e.g. `https://momentum-web-xyz.onrender.com`
-4. Trigger the cron manually once from the Render dashboard to verify you receive the email. The next run fires automatically on the 1st of the next month.
+| Piece | Service | Free tier |
+|---|---|---|
+| Dashboard | [Render](https://render.com) Web Service | 750 hr/mo, sleeps after 15 min idle |
+| Monthly email cron | GitHub Actions | 2,000 min/mo (private repo); unlimited for public |
+| Email delivery | [Resend](https://resend.com) | 3,000 emails/mo |
+
+Render's Free plan doesn't include cron jobs, which is why the schedule lives in GitHub Actions instead.
+
+**1. Deploy the dashboard on Render:**
+- Render dashboard → **New → Blueprint** → connect this repo.
+- Render reads [`render.yaml`](../render.yaml) and creates the `momentum-web` service on the Free plan. Note the public URL it gives you (e.g. `https://momentum-web-xyz.onrender.com`).
+
+**2. Set up the monthly email cron in GitHub:**
+- In your fork's GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**, add four secrets:
+  - `RESEND_API_KEY` — from [resend.com/api-keys](https://resend.com/api-keys)
+  - `EMAIL_FROM` — Resend-verified sender (e.g. `picks@yourdomain.com`; for testing you can use `onboarding@resend.dev`)
+  - `EMAIL_TO` — recipient(s), comma-separated
+  - `MOMENTUM_API_BASE` — the Render URL from step 1
+- The workflow at [`.github/workflows/monthly-picks-email.yml`](../.github/workflows/monthly-picks-email.yml) fires automatically at **22:00 UTC on the 1st of each month** (≈ 5–6 pm ET, just after the new month's first-trading-day close).
+
+**3. Smoke-test:**
+- GitHub → **Actions → Monthly picks email → Run workflow** → check that you receive the email within ~1 minute (longer if the Render web service is asleep — first call wakes it).
 
 The email body shows both strategies' open holdings with rank, MTD return, and entry/last prices — same data the dashboard surfaces.
 

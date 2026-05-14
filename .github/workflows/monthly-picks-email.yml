@@ -1,0 +1,41 @@
+name: Monthly picks email
+
+# Fires at 22:00 UTC on the 1st of each month — about 1–2 hours after
+# the US market close, so yfinance has the new first-trading-day's
+# adjusted close available. Also exposes a manual trigger via the
+# Actions tab for smoke tests.
+on:
+  schedule:
+    - cron: "0 22 1 * *"
+  workflow_dispatch:
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: nasdaq100_momentum_backtest/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r nasdaq100_momentum_backtest/requirements.txt
+
+      - name: Send picks email
+        working-directory: nasdaq100_momentum_backtest
+        env:
+          RESEND_API_KEY:    ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM:        ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO:          ${{ secrets.EMAIL_TO }}
+          MOMENTUM_API_BASE: ${{ secrets.MOMENTUM_API_BASE }}
+          REFRESH:           "1"
+          PYTHONUNBUFFERED:  "1"
+        run: python send_picks_email.py
