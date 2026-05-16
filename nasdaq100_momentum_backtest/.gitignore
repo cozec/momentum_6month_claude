@@ -1,5 +1,5 @@
 # Per backtest_rules.md: do not check in data, results, logs, .venv
-data/
+data/**
 results/
 logs/
 plots/
@@ -8,3 +8,7 @@ outputs/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Exception: ship a seed price cache for fast cold-starts on Render.
+!data/raw_prices/
+!data/raw_prices/*.csv

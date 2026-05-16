@@ -1,10 +1,21 @@
 """FastAPI server exposing the latest momentum picks as JSON.
 
-Every refresh hits ``/api/picks``, which re-runs the backtest pipeline
-end-to-end using ``end_date = today``. On the first trading day of a
-new month the prior open holding period naturally closes out — the
-rebalance loop reads the fresh price data, the new month-end appears as
-a completed exit, and the next entry becomes the new open position.
+Every refresh hits ``/api/picks`` (or ``/api/picks-multi`` for multiple
+strategies in one request). On the first trading day of a new month
+the prior open holding period naturally closes out — the rebalance
+loop reads the fresh price data, the new month-end appears as a
+completed exit, and the next entry becomes the new open position.
+
+Caching
+-------
+A small in-memory cache short-circuits repeated requests within
+``CACHE_TTL_SECONDS`` for the same (lookback, period, today) tuple.
+Forcing ``refresh=true`` bypasses the cache so the next call gets
+fresh yfinance data. The cache lives in this process — when Render's
+Free-plan worker sleeps and wakes, it starts cold again. That's
+fine: cold-start cost is dominated by yfinance, and the project
+ships a seed price cache (``data/raw_prices/*.csv``) so the worker
+boots with prices already on disk.
 """
 
 from __future__ import annotations
@@ -13,15 +24,14 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from threading import Lock
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-# Make the parent ``nasdaq100_momentum_backtest`` package importable when
-# the server is launched directly via ``uvicorn webapp.server:app``.
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -32,9 +42,17 @@ from src.metrics import calculate_summary_stats
 
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+# How long to reuse a previously-computed payload for the same
+# (lookback, period, today) tuple. 5 min keeps refreshes responsive
+# without showing stale prices for long.
+CACHE_TTL_SECONDS = 300
 
 app = FastAPI(title="Nasdaq-100 Momentum Picks")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# (lookback, period, as_of_date) -> (computed_at_ts, payload)
+_RESULT_CACHE: Dict[Tuple[int, int, str], Tuple[float, Dict[str, Any]]] = {}
+_CACHE_LOCK = Lock()
 
 
 @app.get("/")
@@ -44,12 +62,7 @@ def index() -> FileResponse:
 
 @app.get("/health")
 def health() -> Dict[str, str]:
-    """Cheap liveness probe — no backtest run, returns instantly.
-
-    Render's deploy health-check hits this; using ``/api/picks`` instead
-    would force a 30-60s yfinance fetch before the deploy is marked
-    healthy, which can trip the probe timeout.
-    """
+    """Cheap liveness probe — no backtest run, returns instantly."""
     return {"status": "ok"}
 
 
@@ -63,16 +76,16 @@ def _safe_float(x: Any) -> Optional[float]:
         return None
 
 
-@app.get("/api/picks")
-def api_picks(
-    refresh: bool = Query(False, description="Re-download fresh prices"),
-    history: int = Query(12, ge=1, le=120, description="Past months to return"),
-    lookback: int = Query(6, ge=1, le=24, description="Lookback months for momentum"),
-    period: int = Query(1, ge=1, le=12, description="Months between rebalances"),
+def _compute_payload(
+    lookback: int,
+    period: int,
+    history: int,
+    refresh: bool,
+    today: pd.Timestamp,
 ) -> Dict[str, Any]:
+    """Run the backtest pipeline for one (lookback, period) and return
+    the JSON payload. Heavy: ~0.5–2 s on a warm Render worker."""
     started = time.time()
-    today = pd.Timestamp.now().normalize()
-
     config = BacktestConfig(
         start_date="2016-01-01",
         end_date=today.strftime("%Y-%m-%d"),
@@ -101,11 +114,8 @@ def api_picks(
         periods_per_year=12.0 / max(1, period),
     )
 
-    # Cumulative return for just the requested history window.
     recent_pr = portfolio[portfolio["rebalance_date"].isin(completed_dates)]
-    window_cum_strategy = float(
-        (1.0 + recent_pr["portfolio_return_net"]).prod() - 1.0
-    )
+    window_cum_strategy = float((1.0 + recent_pr["portfolio_return_net"]).prod() - 1.0)
     window_cum_qqq = float((1.0 + recent_pr["qqq_return"]).prod() - 1.0)
 
     completed_payload: List[Dict[str, Any]] = []
@@ -150,7 +160,7 @@ def api_picks(
         except KeyError:
             return None
 
-    payload = {
+    return {
         "as_of": today.strftime("%Y-%m-%d"),
         "computed_at": datetime.now().isoformat(timespec="seconds"),
         "took_seconds": round(time.time() - started, 2),
@@ -193,4 +203,84 @@ def api_picks(
             ),
         },
     }
+
+
+def _get_cached_or_compute(
+    lookback: int, period: int, history: int, refresh: bool, today: pd.Timestamp,
+) -> Dict[str, Any]:
+    """Memoized wrapper around ``_compute_payload``.
+
+    A 5-minute TTL (``CACHE_TTL_SECONDS``) keeps page refreshes
+    near-instant without serving stale prices for long. Forcing
+    ``refresh=True`` bypasses the cache *and* tells yfinance to
+    re-download, which the monthly email cron uses.
+    """
+    cache_key = (lookback, period, today.strftime("%Y-%m-%d"))
+    now = time.time()
+    if not refresh:
+        with _CACHE_LOCK:
+            entry = _RESULT_CACHE.get(cache_key)
+        if entry and now - entry[0] < CACHE_TTL_SECONDS:
+            payload = dict(entry[1])
+            payload["cache_hit"] = True
+            payload["cache_age_seconds"] = round(now - entry[0], 1)
+            return payload
+    payload = _compute_payload(lookback, period, history, refresh, today)
+    payload["cache_hit"] = False
+    payload["cache_age_seconds"] = 0.0
+    with _CACHE_LOCK:
+        _RESULT_CACHE[cache_key] = (now, payload)
     return payload
+
+
+@app.get("/api/picks")
+def api_picks(
+    refresh: bool = Query(False, description="Re-download fresh prices"),
+    history: int = Query(12, ge=1, le=120, description="Past months to return"),
+    lookback: int = Query(6, ge=1, le=24, description="Lookback months for momentum"),
+    period: int = Query(1, ge=1, le=12, description="Months between rebalances"),
+) -> Dict[str, Any]:
+    today = pd.Timestamp.now().normalize()
+    return _get_cached_or_compute(lookback, period, history, refresh, today)
+
+
+@app.get("/api/picks-multi")
+def api_picks_multi(
+    configs: str = Query(
+        "6-1,3-2",
+        description='Comma-separated "lookback-period" pairs, e.g. "6-1,3-2"',
+    ),
+    refresh: bool = Query(False),
+    history: int = Query(12, ge=1, le=120),
+) -> Dict[str, Any]:
+    """Return picks for several strategies in one round-trip.
+
+    Lets the frontend collapse two parallel ``/api/picks`` calls into
+    one request — the in-memory cache further short-circuits the heavy
+    work if both strategies were already computed in the last 5 min.
+    """
+    today = pd.Timestamp.now().normalize()
+    parsed: List[Tuple[int, int]] = []
+    for token in configs.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            lb_str, p_str = token.split("-", 1)
+            parsed.append((int(lb_str), int(p_str)))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid config token {token!r}; expected 'lookback-period'.",
+            ) from exc
+    if not parsed:
+        raise HTTPException(status_code=400, detail="No valid configs provided.")
+
+    strategies = [
+        _get_cached_or_compute(lb, p, history, refresh, today) for lb, p in parsed
+    ]
+    return {
+        "as_of": today.strftime("%Y-%m-%d"),
+        "computed_at": datetime.now().isoformat(timespec="seconds"),
+        "strategies": strategies,
+    }

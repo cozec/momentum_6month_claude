@@ -1,10 +1,17 @@
 # Per backtest_rules.md: do not check in data, results, logs, .venv
 .venv/
-**/data/
+**/data/**
 **/results/
 **/logs/
 **/plots/
 **/outputs/
+
+# Exception: ship a seed price cache so the Render Free-plan service
+# starts with a warm cache and the first user request doesn't pay the
+# ~25 s yfinance cold-download cost. The cache stays fresh via the
+# monthly cron (which calls /api/picks?refresh=1).
+!**/data/raw_prices/
+!**/data/raw_prices/*.csv
 
 # Python
 __pycache__/

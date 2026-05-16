@@ -187,20 +187,6 @@ function renderUpdated(data) {
   `;
 }
 
-async function loadStrategy(root, { refresh }) {
-  const lookback = root.dataset.lookback;
-  const period = root.dataset.period;
-  const params = new URLSearchParams({ lookback, period });
-  if (refresh) params.set('refresh', '1');
-  const resp = await fetch(`/api/picks?${params.toString()}`, { cache: 'no-store' });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} for L${lookback}/P${period}`);
-  const data = await resp.json();
-  renderOpen(root, data);
-  renderStats(root, data);
-  renderHistory(root, data);
-  return data;
-}
-
 async function load({ refresh = false } = {}) {
   const refreshBtn = document.getElementById('refresh-btn');
   const refreshLabel = document.getElementById('refresh-label');
@@ -212,13 +198,31 @@ async function load({ refresh = false } = {}) {
   refreshIcon.classList.add('animate-spin');
 
   try {
-    const strategies = Array.from(document.querySelectorAll('.strategy'));
-    // Run them in parallel — backend cache shares the price download.
-    const results = await Promise.all(strategies.map(r => loadStrategy(r, { refresh })));
-    // Use the latest computed_at for the header timestamp.
-    const newest = results.reduce((acc, d) =>
-      (acc && acc.computed_at > d.computed_at ? acc : d), null);
-    if (newest) renderUpdated(newest);
+    const strategyEls = Array.from(document.querySelectorAll('.strategy'));
+    // Build configs query like "6-1,3-2" from the DOM.
+    const configs = strategyEls
+      .map(r => `${r.dataset.lookback}-${r.dataset.period}`)
+      .join(',');
+    const params = new URLSearchParams({ configs });
+    if (refresh) params.set('refresh', '1');
+    const resp = await fetch(`/api/picks-multi?${params.toString()}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} from /api/picks-multi`);
+    const bundle = await resp.json();
+    const list = bundle.strategies || [];
+
+    // Match each returned strategy back to its DOM container by label.
+    const byKey = new Map(
+      list.map(s => [`${s.strategy.lookback_months}-${s.strategy.rebalance_period_months}`, s])
+    );
+    for (const root of strategyEls) {
+      const key = `${root.dataset.lookback}-${root.dataset.period}`;
+      const data = byKey.get(key);
+      if (!data) continue;
+      renderOpen(root, data);
+      renderStats(root, data);
+      renderHistory(root, data);
+    }
+    if (list.length) renderUpdated(list[0]);
   } catch (e) {
     err.textContent = `Failed to load picks: ${e.message}. Check that the server is running and Yahoo Finance is reachable.`;
     err.classList.remove('hidden');
