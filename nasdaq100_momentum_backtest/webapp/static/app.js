@@ -93,6 +93,54 @@ function pickCard(pick, opts = {}) {
   `;
 }
 
+function renderNext(root, data) {
+  const section = root.querySelector('.strategy-next');
+  if (!section) return;
+  const grid = section.querySelector('[data-el="next-grid"]');
+  const label = section.querySelector('[data-el="next-entry-label"]');
+  const note = section.querySelector('[data-el="next-note"]');
+  const picks = data.next || [];
+  const meta = data.next_meta || {};
+
+  if (!picks.length) {
+    section.classList.add('hidden');
+    grid.innerHTML = '';
+    label.textContent = '';
+    if (note) note.textContent = '';
+    return;
+  }
+
+  section.classList.remove('hidden');
+  label.innerHTML = `signal locked through ${fmtDay(meta.signal_locked_as_of)} · planned entry ${fmtDay(meta.planned_entry_date)}`;
+  // Synthesize "preview" cards — no return colouring (return is 0), just
+  // ticker accent stripe so they read as "upcoming" not "performing".
+  grid.innerHTML = picks.map(p => {
+    const color = tickerColor(p.ticker);
+    const priceEst = p.entry_price_estimate;
+    const priceLine = priceEst != null
+      ? `est. entry ≈ $${priceEst.toFixed(2)}`
+      : '';
+    return `
+      <div class="card rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 overflow-hidden">
+        <div class="accent-stripe" style="background:${color}"></div>
+        <div class="p-5">
+          <div class="flex items-center justify-between">
+            <div class="text-3xl font-bold text-slate-900">${p.ticker}</div>
+            <div class="text-[10px] text-slate-500 font-medium">#${p.rank} · NEXT</div>
+          </div>
+          <div class="mt-1 text-sm text-indigo-700 font-medium">
+            ${priceLine}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  if (note) {
+    note.innerHTML = `Signal is determined by the last close before ${fmtDay(meta.planned_entry_date)}. Place an MOC order to match the backtest's entry assumption.`;
+  }
+}
+
+
 function renderOpen(root, data) {
   const grid = root.querySelector('[data-el="open-grid"]');
   const label = root.querySelector('[data-el="open-entry-label"]');
@@ -218,6 +266,7 @@ async function load({ refresh = false } = {}) {
       const key = `${root.dataset.lookback}-${root.dataset.period}`;
       const data = byKey.get(key);
       if (!data) continue;
+      renderNext(root, data);
       renderOpen(root, data);
       renderStats(root, data);
       renderHistory(root, data);

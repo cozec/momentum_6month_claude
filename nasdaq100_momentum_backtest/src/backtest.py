@@ -279,6 +279,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
     # That date is the entry of the currently-open holding period whose exit
     # (next month's first trading day) is still in the future.
     open_position = pd.DataFrame()
+    next_position = pd.DataFrame()
     if len(rebalance_days) >= 1:
         open_entry = rebalance_days[-1]
         open_position = compute_open_position(
@@ -291,6 +292,19 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
                 pd.Timestamp(open_position["exit_date"].iloc[0]).date(),
                 list(open_position["ticker"]),
             )
+        # Once the last trading day of the current rebalance period has
+        # passed, we can already score the *upcoming* entry — that's the
+        # "Next picks" preview the dashboard shows on Friday evening
+        # before the new month begins.
+        next_position = compute_next_position(
+            prices, monthly_returns, config, open_entry
+        )
+        if not next_position.empty:
+            LOGGER.info(
+                "Next position (planned entry %s): %s",
+                pd.Timestamp(next_position["rebalance_date"].iloc[0]).date(),
+                list(next_position["ticker"]),
+            )
 
     return {
         "selections": selections,
@@ -298,6 +312,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         "prices": prices,
         "monthly_returns": monthly_returns,
         "open_position": open_position,
+        "next_position": next_position,
     }
 
 
@@ -307,6 +322,104 @@ def _compute_turnover(
     """L1 turnover between two weight dicts (sum of absolute weight changes)."""
     tickers = set(prior) | set(new)
     return float(sum(abs(new.get(t, 0.0) - prior.get(t, 0.0)) for t in tickers))
+
+
+def _predict_next_first_trading_day(
+    current_entry: pd.Timestamp, period_months: int
+) -> pd.Timestamp:
+    """Predict the next rebalance entry date.
+
+    Uses generic business-day logic — rolls the 1st of the target month
+    forward over weekends. NYSE holidays falling on the 1st (very rare:
+    only New Year's Day on a weekday matters here) can shift the actual
+    first trading day by 1–2 days, but scoring is robust to that
+    because ``calculate_momentum_scores`` keys on ``index < asof``.
+    """
+    target = current_entry + pd.DateOffset(months=int(period_months))
+    candidate = pd.Timestamp(target.year, target.month, 1)
+    while candidate.weekday() >= 5:  # Sat=5, Sun=6
+        candidate += pd.Timedelta(days=1)
+    return candidate
+
+
+def compute_next_position(
+    prices: pd.DataFrame,
+    monthly_returns: pd.DataFrame,
+    config: BacktestConfig,
+    current_open_entry,
+) -> pd.DataFrame:
+    """Score the *upcoming* rebalance, if the signal is already locked.
+
+    The signal for entry date ``E`` is locked once we have prices through
+    the last trading day of the month preceding ``E``. Concretely, after
+    the close of Friday 2026-05-29 (last trading day of May) the picks
+    that the model will enter on Mon 2026-06-01 are fully determined.
+
+    This helper:
+      * predicts the next entry date as ``current_open_entry +
+        rebalance_period_months months → first business day``,
+      * checks the locked-signal condition,
+      * if locked, computes scores at that next entry date and returns a
+        DataFrame in the same shape as ``compute_open_position``, with
+        ``is_next=True`` and ``stock_return=0.0`` (we haven't entered
+        yet; ``entry_price`` is the most recent close as a planning
+        estimate).
+      * if not locked, returns an empty DataFrame.
+    """
+    if prices.empty or monthly_returns.empty:
+        return pd.DataFrame()
+
+    benchmark = config.benchmark.upper()
+    secondary = (config.secondary_benchmark or "").upper()
+    excluded = {benchmark}
+    if secondary:
+        excluded.add(secondary)
+
+    period = max(1, int(config.rebalance_period_months))
+    current_entry = to_business_date(current_open_entry)
+    next_entry = _predict_next_first_trading_day(current_entry, period)
+
+    # Signal-locked check: we need data through the last business day of
+    # the calendar month before next_entry.
+    last_required = next_entry - pd.offsets.BDay(1)
+    if pd.Timestamp(prices.index.max()) < last_required:
+        return pd.DataFrame()
+
+    available = [t for t in prices.columns if t not in excluded]
+    membership_df = _build_membership(config)
+    eligible = get_eligible_universe(
+        membership_df, next_entry, available_tickers=available
+    )
+    scores = calculate_momentum_scores(
+        monthly_returns[eligible] if eligible else monthly_returns.iloc[:, :0],
+        next_entry,
+        lookback_months=config.lookback_months,
+        score_method=config.score_method,
+    )
+    selected = select_top_n(scores, n=config.top_n)
+    if not selected:
+        return pd.DataFrame()
+
+    latest_date = pd.Timestamp(prices.index.max())
+    rows = []
+    for rank, ticker in enumerate(selected, start=1):
+        series = prices[ticker]
+        entry_estimate = _price_on_or_before(series, latest_date)
+        if entry_estimate is None or entry_estimate == 0:
+            continue
+        rows.append({
+            "rebalance_date": next_entry,
+            "ticker": ticker,
+            "rank": rank,
+            "momentum_score": float(scores.get(ticker, np.nan)),
+            "weight": 1.0 / len(selected),
+            "entry_price": entry_estimate,    # planning estimate
+            "exit_date": latest_date,         # "as-of" latest known price
+            "exit_price": entry_estimate,     # same as entry → return = 0
+            "stock_return": 0.0,
+            "is_next": True,
+        })
+    return pd.DataFrame(rows)
 
 
 def compute_open_position(

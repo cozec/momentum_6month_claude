@@ -97,6 +97,7 @@ def _compute_payload(
     selections: pd.DataFrame = results["selections"]
     portfolio: pd.DataFrame = results["portfolio_returns"]
     open_pos: Optional[pd.DataFrame] = results.get("open_position")
+    next_pos: Optional[pd.DataFrame] = results.get("next_position")
 
     portfolio["rebalance_date"] = pd.to_datetime(portfolio["rebalance_date"])
     selections["rebalance_date"] = pd.to_datetime(selections["rebalance_date"])
@@ -154,6 +155,27 @@ def _compute_payload(
             "mtd_portfolio_return": float(op["stock_return"].mean()),
         }
 
+    next_payload: List[Dict[str, Any]] = []
+    next_meta: Dict[str, Any] = {}
+    if next_pos is not None and not next_pos.empty:
+        np_ = next_pos.copy()
+        np_["rebalance_date"] = pd.to_datetime(np_["rebalance_date"])
+        np_["exit_date"] = pd.to_datetime(np_["exit_date"])
+        for _, r in np_.sort_values("rank").iterrows():
+            next_payload.append({
+                "date": r["rebalance_date"].strftime("%Y-%m-%d"),
+                "as_of": r["exit_date"].strftime("%Y-%m-%d"),
+                "ticker": r["ticker"],
+                "rank": int(r["rank"]),
+                "stock_return": 0.0,
+                "momentum_score": _safe_float(r["momentum_score"]),
+                "entry_price_estimate": _safe_float(r["entry_price"]),
+            })
+        next_meta = {
+            "planned_entry_date": pd.Timestamp(np_["rebalance_date"].iloc[0]).strftime("%Y-%m-%d"),
+            "signal_locked_as_of": pd.Timestamp(np_["exit_date"].iloc[0]).strftime("%Y-%m-%d"),
+        }
+
     def _row(stat: str, col: str) -> Optional[float]:
         try:
             return _safe_float(summary.loc[stat, col])
@@ -172,6 +194,8 @@ def _compute_payload(
         "completed": completed_payload,
         "open": open_payload,
         "open_meta": open_meta,
+        "next": next_payload,
+        "next_meta": next_meta,
         "window": {
             "first_date": completed_dates[0].strftime("%Y-%m-%d") if completed_dates else None,
             "last_date": completed_dates[-1].strftime("%Y-%m-%d") if completed_dates else None,
