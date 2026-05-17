@@ -324,22 +324,111 @@ def _compute_turnover(
     return float(sum(abs(new.get(t, 0.0) - prior.get(t, 0.0)) for t in tickers))
 
 
+def _is_nyse_month_first_holiday(d: pd.Timestamp) -> bool:
+    """True if ``d`` is an NYSE holiday that can land at or near the
+    1st of a calendar month.
+
+    The only realistic cases are:
+      * Jan 1 — New Year's Day (always closed).
+      * Jan 2 — observed New Year's Day, but only when Jan 1 was a Sunday.
+      * The first Monday of September — Labor Day (can fall on day 1–7).
+
+    Memorial Day / Independence Day / Thanksgiving / Christmas never fall
+    near the 1st, so they are not relevant for predicting the next
+    first-trading-day.
+    """
+    if d.month == 1 and d.day == 1:
+        return True
+    # New Year's observed on Mon Jan 2 when Jan 1 was a Sunday.
+    if d.month == 1 and d.day == 2 and d.weekday() == 0:
+        if pd.Timestamp(d.year, 1, 1).weekday() == 6:  # Sun
+            return True
+    # Labor Day: first Monday of September.
+    if d.month == 9 and d.weekday() == 0 and d.day <= 7:
+        return True
+    return False
+
+
 def _predict_next_first_trading_day(
     current_entry: pd.Timestamp, period_months: int
 ) -> pd.Timestamp:
     """Predict the next rebalance entry date.
 
-    Uses generic business-day logic — rolls the 1st of the target month
-    forward over weekends. NYSE holidays falling on the 1st (very rare:
-    only New Year's Day on a weekday matters here) can shift the actual
-    first trading day by 1–2 days, but scoring is robust to that
-    because ``calculate_momentum_scores`` keys on ``index < asof``.
+    Rolls the 1st of the target month forward over weekends and the
+    NYSE holidays that can occur at the start of a month (see
+    :func:`_is_nyse_month_first_holiday`).
     """
     target = current_entry + pd.DateOffset(months=int(period_months))
     candidate = pd.Timestamp(target.year, target.month, 1)
-    while candidate.weekday() >= 5:  # Sat=5, Sun=6
-        candidate += pd.Timedelta(days=1)
+    for _ in range(7):
+        if candidate.weekday() >= 5 or _is_nyse_month_first_holiday(candidate):
+            candidate += pd.Timedelta(days=1)
+            continue
+        break
     return candidate
+
+
+def _score_at(
+    prices: pd.DataFrame,
+    monthly_returns: pd.DataFrame,
+    config: BacktestConfig,
+    asof: pd.Timestamp,
+) -> Tuple[List[str], pd.Series]:
+    """Score every eligible ticker at ``asof`` and return
+    ``(selected_top_n_tickers, all_scores)``.
+
+    Centralizes the boilerplate shared by :func:`compute_open_position`
+    and :func:`compute_next_position`.
+    """
+    benchmark = config.benchmark.upper()
+    secondary = (config.secondary_benchmark or "").upper()
+    excluded = {benchmark}
+    if secondary:
+        excluded.add(secondary)
+    available = [t for t in prices.columns if t not in excluded]
+    membership_df = _build_membership(config)
+    eligible = get_eligible_universe(
+        membership_df, asof, available_tickers=available
+    )
+    scores = calculate_momentum_scores(
+        monthly_returns[eligible] if eligible else monthly_returns.iloc[:, :0],
+        asof,
+        lookback_months=config.lookback_months,
+        score_method=config.score_method,
+    )
+    selected = select_top_n(scores, n=config.top_n)
+    return selected, scores
+
+
+def _signal_locked_for_next_entry(
+    prices: pd.DataFrame, next_entry: pd.Timestamp
+) -> bool:
+    """True iff the most recent data is the last trading day of the
+    calendar month preceding ``next_entry``.
+
+    Two-part test:
+      1. ``prices.index.max()`` must fall in the calendar month immediately
+         before ``next_entry``'s month.
+      2. Stepping forward up to 3 generic business days from that day
+         must cross into a new calendar month. The 3-day window
+         absorbs Memorial Day landing on the 31st (where the actual
+         last NYSE trading day is the preceding Friday, and the next
+         generic BDay is the closed Monday).
+    """
+    if prices.empty:
+        return False
+    last_data = pd.Timestamp(prices.index.max())
+    prev_month_anchor = next_entry - pd.Timedelta(days=1)
+    in_prev_month = (
+        last_data.year == prev_month_anchor.year
+        and last_data.month == prev_month_anchor.month
+    )
+    if not in_prev_month:
+        return False
+    for offset in (1, 2, 3):
+        if (last_data + pd.offsets.BDay(offset)).month != last_data.month:
+            return True
+    return False
 
 
 def compute_next_position(
@@ -369,34 +458,13 @@ def compute_next_position(
     if prices.empty or monthly_returns.empty:
         return pd.DataFrame()
 
-    benchmark = config.benchmark.upper()
-    secondary = (config.secondary_benchmark or "").upper()
-    excluded = {benchmark}
-    if secondary:
-        excluded.add(secondary)
-
     period = max(1, int(config.rebalance_period_months))
     current_entry = to_business_date(current_open_entry)
     next_entry = _predict_next_first_trading_day(current_entry, period)
-
-    # Signal-locked check: we need data through the last business day of
-    # the calendar month before next_entry.
-    last_required = next_entry - pd.offsets.BDay(1)
-    if pd.Timestamp(prices.index.max()) < last_required:
+    if not _signal_locked_for_next_entry(prices, next_entry):
         return pd.DataFrame()
 
-    available = [t for t in prices.columns if t not in excluded]
-    membership_df = _build_membership(config)
-    eligible = get_eligible_universe(
-        membership_df, next_entry, available_tickers=available
-    )
-    scores = calculate_momentum_scores(
-        monthly_returns[eligible] if eligible else monthly_returns.iloc[:, :0],
-        next_entry,
-        lookback_months=config.lookback_months,
-        score_method=config.score_method,
-    )
-    selected = select_top_n(scores, n=config.top_n)
+    selected, scores = _score_at(prices, monthly_returns, config, next_entry)
     if not selected:
         return pd.DataFrame()
 
@@ -440,27 +508,8 @@ def compute_open_position(
     Returns a DataFrame with the same columns as ``monthly_selections.csv``
     plus a boolean ``is_open`` flag.
     """
-    benchmark = config.benchmark.upper()
-    secondary = (config.secondary_benchmark or "").upper()
-    excluded = {benchmark}
-    if secondary:
-        excluded.add(secondary)
-
     entry_date = to_business_date(entry_date)
-    available = [t for t in prices.columns if t not in excluded]
-
-    membership_df = _build_membership(config)
-    eligible = get_eligible_universe(
-        membership_df, entry_date, available_tickers=available
-    )
-
-    scores = calculate_momentum_scores(
-        monthly_returns[eligible] if eligible else monthly_returns.iloc[:, :0],
-        entry_date,
-        lookback_months=config.lookback_months,
-        score_method=config.score_method,
-    )
-    selected = select_top_n(scores, n=config.top_n)
+    selected, scores = _score_at(prices, monthly_returns, config, entry_date)
     if not selected:
         return pd.DataFrame()
 
