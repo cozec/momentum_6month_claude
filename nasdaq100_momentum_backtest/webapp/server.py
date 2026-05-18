@@ -92,6 +92,11 @@ def _compute_payload(
         force_refresh=refresh,
         lookback_months=lookback,
         rebalance_period_months=period,
+        # Use the point-in-time membership table (shipped at
+        # data/nasdaq100_membership.csv, rebuilt by scripts/
+        # build_membership.py). Removes ~25 pp of survivorship-bias
+        # premium that the current-snapshot universe would show.
+        use_historical_membership=True,
     )
     results = run_backtest(config)
     selections: pd.DataFrame = results["selections"]
