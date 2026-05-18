@@ -37,10 +37,20 @@
 | Win rate vs TQQQ (months) | 46.2% | — | — |
 | Average turnover | 77.21%/mo | — | — |
 
-> For reference, the *survivorship-biased* run with the current-snapshot universe
-> reports CAGR 83.42% / Sharpe 1.43 / Max DD -36.48% / Total return +36,827%.
-> Switching to point-in-time membership removes ≈ 25.7 pp of headline CAGR while
-> leaving Sharpe roughly unchanged — see Caveat 1.
+## Snapshot vs PIT membership — by strategy
+
+The webapp at [`webapp/`](webapp/) renders both Strategy A and Strategy B; each can be run against either the current-snapshot universe (cheap, survivorship-biased) or the PIT membership CSV. The dashboard was flipped to PIT in commit `202d4f0`. Concretely:
+
+| | Snapshot (was) | **PIT (now)** | Δ |
+|---|---:|---:|---:|
+| Strategy A CAGR | 83.42% | **57.70%** | −25.7 pp |
+| Strategy A Sharpe | 1.43 | **1.36** | −0.07 |
+| Strategy B CAGR | 97.84% | **46.86%** | **−51.0 pp** |
+| Strategy B Sharpe | 1.58 | **1.24** | −0.34 |
+
+**Why Strategy B's correction is much larger:** its top-3 leaned more heavily on late-2024+ additions (MSTR, PLTR, APP, SNDK) than the L=6m baseline did. The bi-monthly variant was *more* survivorship-inflated, which is consistent with the grid-search caveat: a 0.15-Sharpe edge over 60 observations is well within noise, and most of it was bias to begin with.
+
+**What doesn't change:** the *current* open holdings on both strategies are identical to the snapshot run (`SNDK / WDC / INTC` for A; `INTC / MRVL / SNDK` for B), because all six tickers are current Nasdaq-100 members on the 2026-05-01 entry date. The historical timeline rows in the dashboard's "Past Rebalances" feed do differ — under PIT, late additions are simply not in the eligible universe before their join dates.
 
 ## Interpretation
 
