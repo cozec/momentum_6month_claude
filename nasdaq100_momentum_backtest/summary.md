@@ -5,7 +5,7 @@
 | Parameter | Value |
 |-----------|-------|
 | Strategy | Top-3 equal-weight, 6-month average monthly return |
-| Universe | Current Nasdaq-100 (101 tickers — both GOOG/GOOGL share classes; survivorship-biased) |
+| Universe | Nasdaq-100 with **point-in-time membership** (from `scripts/build_membership.py` → 300 spans, 101 currently active). Survivorship bias controlled. |
 | Data window | 2016-01-01 → 2026-05-12 |
 | Realized backtest window | 2016-08-01 entry → 2026-05-01 exit |
 | Lookback | 6 completed months |
@@ -17,32 +17,37 @@
 | Primary benchmark | QQQ (buy & hold) |
 | Secondary benchmark | TQQQ (buy & hold, 3× leveraged QQQ) |
 | Rebalances executed | 117 |
-| Tickers with usable history | 101 of 101 |
+| Tickers with usable history | 101 currently active + historical adds/drops via PIT membership |
 
-## Headline results
+## Headline results (point-in-time membership)
 
 | Metric | Strategy | QQQ B&H | TQQQ B&H |
 |--------|---------:|--------:|---------:|
-| CAGR | **83.42%** | 20.64% | 40.45% |
-| Annualized volatility | 51.65% | 20.11% | 62.87% |
-| Sharpe ratio | **1.43** | 1.04 | 0.86 |
-| Max drawdown | -36.48% | -33.67% | **-80.13%** |
-| Total return | +36,827% | +523% | +2,644% |
-| Final value (from $100k) | $37,026,765 | $622,982 | $2,743,567 |
-| Average monthly return | 6.15% | 1.74% | 4.52% |
-| Median monthly return | 3.60% | 2.08% | 5.10% |
-| Best month | +60.73% | +16.69% | +52.19% |
-| Worst month | -23.40% | -15.58% | -52.31% |
-| Win rate vs QQQ (months) | 59.8% | — | — |
-| Win rate vs TQQQ (months) | 52.1% | — | — |
-| Average turnover | 70.94%/mo | — | — |
+| CAGR | **57.70%** | 20.64% | 40.45% |
+| Annualized volatility | 39.20% | 20.11% | 62.87% |
+| Sharpe ratio | **1.36** | 1.04 | 0.86 |
+| Max drawdown | -30.56% | -33.67% | **-80.13%** |
+| Total return | +8,390% | +523% | +2,644% |
+| Final value (from $100k) | $8,489,656 | $622,983 | $2,743,567 |
+| Average monthly return | 4.44% | 1.74% | 4.52% |
+| Median monthly return | 2.42% | 2.08% | 5.10% |
+| Best month | +54.71% | +16.69% | +52.19% |
+| Worst month | -18.15% | -15.58% | -52.31% |
+| Win rate vs QQQ (months) | 58.1% | — | — |
+| Win rate vs TQQQ (months) | 46.2% | — | — |
+| Average turnover | 77.21%/mo | — | — |
+
+> For reference, the *survivorship-biased* run with the current-snapshot universe
+> reports CAGR 83.42% / Sharpe 1.43 / Max DD -36.48% / Total return +36,827%.
+> Switching to point-in-time membership removes ≈ 25.7 pp of headline CAGR while
+> leaving Sharpe roughly unchanged — see Caveat 1.
 
 ## Interpretation
 
-- **Strategy vs QQQ.** Better on absolute return (+36,827% vs +523%) and on Sharpe (1.43 vs 1.04), at the cost of ~2.6× the volatility and a slightly deeper drawdown (-36.5% vs -33.7%). The strategy beats QQQ in 60% of months.
-- **Strategy vs TQQQ.** TQQQ buy-and-hold (3× daily QQQ) compounded to +2,644% over this window — about 5× the QQQ return, well short of a naive 3× because of daily-rebalanced volatility drag and the brutal 2022 drawdown. The strategy still beat TQQQ in 52% of months and in absolute terms (≈$37.0M vs ≈$2.7M), while running materially lower volatility (52% vs 63%) and a much shallower max drawdown (-36.5% vs **-80.1%**). Sharpe is higher for the strategy (1.43 vs 0.86).
+- **Strategy vs QQQ.** Still meaningfully better on absolute return (+8,390% vs +523%) and on Sharpe (1.36 vs 1.04), at the cost of ~2× the volatility (39% vs 20%). Strikingly, with PIT membership the max drawdown is now *shallower* than QQQ's (-30.6% vs -33.7%) — the strategy rotates out of the worst names before they bottom. Beats QQQ in 58% of months.
+- **Strategy vs TQQQ.** TQQQ buy-and-hold (3× daily QQQ) compounded to +2,644% — about 5× the QQQ return, well short of a naive 3× because of daily-rebalanced volatility drag and the brutal 2022 drawdown. The strategy beats TQQQ in absolute terms (≈$8.5M vs ≈$2.7M) and on Sharpe (1.36 vs 0.86), with much lower volatility (39% vs 63%) and a far shallower max drawdown (-30.6% vs **-80.1%**). It loses on monthly win rate (46% — TQQQ's monthly returns are amplified). The right comparison isn't *which beats more months* but *which is worth holding*: TQQQ-style leverage spends its CAGR on volatility, while the strategy turns it into Sharpe.
 - **TQQQ is the asymmetric loser on drawdown.** -80% peak-to-trough means a $1M TQQQ position drops to $200k; recovering requires a +400% rally on what remains. This is the hidden cost behind TQQQ's superficially attractive +2,644% headline.
-- **No-friction caveat.** This run sets transaction cost = slippage = 0, so strategy returns are *gross* (pre-trading-cost). At ~72% average monthly turnover, a 10 bps round-trip would shave roughly 0.86% per year off the strategy's CAGR; a 20 bps round-trip would shave ~1.7%. QQQ and TQQQ buy-and-hold are essentially frictionless anyway.
+- **No-friction caveat.** This run sets transaction cost = slippage = 0, so strategy returns are *gross* (pre-trading-cost). At ~77% average monthly turnover, a 10 bps round-trip would shave roughly 0.92% per year off the strategy's CAGR; a 20 bps round-trip would shave ~1.8%. QQQ and TQQQ buy-and-hold are essentially frictionless anyway.
 
 ## Grid-search results (lookback × rebalance period)
 
@@ -124,25 +129,27 @@ The remaining ~47% CAGR is still extraordinary, and reflects:
 A proper apples-to-apples result requires a historical Nasdaq-100 membership file (run with `--use-historical-membership`); the code path is ready for it.
 - **Caveat — survivorship bias.** The strategy's universe is the *current* Nasdaq-100, which already includes NVDA, MSTR, PLTR, APP, MELI, AMD. Re-running with historical membership would shrink the strategy's edge over TQQQ (and possibly QQQ). The TQQQ comparison is bias-free; the strategy comparison is not.
 
-## Most-selected tickers (out of 117 rebalances)
+## Most-selected tickers (out of 117 rebalances, PIT membership)
 
 | Ticker | Selections |
 |--------|-----------:|
-| MSTR | 26 |
-| NVDA | 25 |
-| TSLA | 20 |
-| PDD | 19 |
-| INSM | 19 |
-| PLTR | 19 |
-| AMD | 19 |
-| ALNY | 17 |
-| SHOP | 17 |
-| APP | 15 |
-| DXCM | 15 |
-| AXON | 14 |
-| WDC | 11 |
-| ZS | 10 |
-| FANG | 9 |
+| NVDA | 43 |
+| TSLA | 31 |
+| MU | 23 |
+| AMD | 22 |
+| MELI | 18 |
+| PDD | 17 |
+| STX | 11 |
+| NFLX | 11 |
+| PLTR | 10 |
+| CEG | 10 |
+| VRTX | 9 |
+| APP | 8 |
+| META | 8 |
+| AMAT | 8 |
+| CRWD | 7 |
+
+PIT-vs-snapshot diff: under PIT, names always-in-the-index (NVDA, TSLA, MU, AMD, MELI) get many more selections because they're the only eligible momentum candidates for most of the early window. Late additions (MSTR, SHOP, SNDK, WDC, INSM, ALNY, AXON) drop sharply since they aren't eligible until their actual join date.
 
 ## Output files
 
