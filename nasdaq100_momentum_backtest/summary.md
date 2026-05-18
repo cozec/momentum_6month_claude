@@ -49,6 +49,37 @@
 - **TQQQ is the asymmetric loser on drawdown.** -80% peak-to-trough means a $1M TQQQ position drops to $200k; recovering requires a +400% rally on what remains. This is the hidden cost behind TQQQ's superficially attractive +2,644% headline.
 - **No-friction caveat.** This run sets transaction cost = slippage = 0, so strategy returns are *gross* (pre-trading-cost). At ~77% average monthly turnover, a 10 bps round-trip would shave roughly 0.92% per year off the strategy's CAGR; a 20 bps round-trip would shave ~1.8%. QQQ and TQQQ buy-and-hold are essentially frictionless anyway.
 
+## Current holdings and last 12 rebalances
+
+**Open position** (entry 2026-05-01, MTD through 2026-05-12; from the PIT run):
+
+| Rank | Ticker | Momentum score | Entry $ | Latest $ | MTD return |
+|---:|:---:|---:|---:|---:|---:|
+| 1 | SNDK | 0.407 | $1,187.00 | $1,452.02 | **+22.3%** |
+| 2 | WDC  | 0.215 |   $431.52 |   $488.74 | **+13.3%** |
+| 3 | INTC | 0.212 |    $99.62 |   $120.61 | **+21.1%** |
+
+Equal-weight portfolio MTD: **+18.9%**.
+
+**Last 12 completed rebalances** (newest first; each cell shows the per-stock return over the holding period; final column is the equal-weight portfolio's gross return for that month):
+
+| Entry | Exit | #1 | #2 | #3 | Portfolio |
+|---|---|---|---|---|---:|
+| Apr 2026 | May 2026 | WDC (+44.9%) | MU (+47.4%) | STX (+71.8%) | **+54.7%** |
+| Mar 2026 | Apr 2026 | WDC (+10.3%) | MU (−10.8%) | WBD (−3.5%) | −1.4% |
+| Feb 2026 | Mar 2026 | MU (−5.7%) | WDC (−0.1%) | STX (−12.3%) | −6.0% |
+| Jan 2026 | Feb 2026 | WDC (+44.0%) | WBD (−3.5%) | MU (+38.8%) | **+26.4%** |
+| Dec 2025 | Jan 2026 | MU (+31.2%) | WBD (+19.4%) | AMD (+1.7%) | +17.5% |
+| Nov 2025 | Dec 2025 | MU (+2.5%) | AMD (−15.4%) | WBD (+7.1%) | −1.9% |
+| Oct 2025 | Nov 2025 | APP (−10.2%) | PLTR (+12.0%) | WBD (+15.2%) | +5.7% |
+| Sep 2025 | Oct 2025 | PLTR (+17.7%) | AMD (+1.0%) | APP (+46.2%) | +21.6% |
+| Aug 2025 | Sep 2025 | PLTR (+1.8%) | AMD (−5.5%) | NVDA (−1.7%) | −1.8% |
+| Jul 2025 | Aug 2025 | PLTR (+18.1%) | ZS (−8.8%) | CEG (+10.7%) | +6.6% |
+| Jun 2025 | Jul 2025 | PLTR (−1.0%) | AVGO (+6.7%) | CRWD (+2.7%) | +2.8% |
+| May 2025 | Jun 2025 | PLTR (+13.6%) | APP (+43.8%) | MSTR (−2.4%) | +18.3% |
+
+Trailing 12-month compounded returns: **Strategy +241.9% · QQQ +40.6% · TQQQ +131.7%**. The window captured the late-2025 → early-2026 storage/memory rally (SNDK, WDC, MU, STX) plus the PLTR run earlier in 2025, which drove the strategy's outsized year.
+
 ## Grid-search results (lookback × rebalance period)
 
 12 (lookback, period) combos, full window 2016–2026 plus a walk-forward split at **train_end = 2023-01-01** (≈ 6.5 y train / 3.3 y test). Returns are gross; benchmarks are the same as in the headline table. **Rows are ranked by full-period CAGR (highest first).** The top row — L=3m / P=2m — is also the IS, OOS, and full-period Sharpe winner.
