@@ -120,9 +120,23 @@ The code addresses each potential source of bias explicitly:
 - **Corporate actions** — adjusted close (`auto_adjust=True` in yfinance) is used throughout, which folds in dividends and splits.
 - **Execution assumption** — the first trading day's adjusted close is used as both the exit price for the prior month and the entry price for the new month.
 
-## Membership template
+## Membership
 
-A current-snapshot membership CSV is written automatically the first time the backtest runs. To replace it with historical data, edit `data/nasdaq100_membership.csv` with rows of `ticker,start_date,end_date` (empty `end_date` = still a constituent) and run with `--use-historical-membership`.
+The backtest's `--use-historical-membership` flag reads `data/nasdaq100_membership.csv`. Two ways to populate it:
+
+**Auto-built from Wikipedia changelog (recommended).** Run:
+
+```bash
+python scripts/build_membership.py
+```
+
+This walks the hard-coded reconstitution table in [`scripts/build_membership.py`](scripts/build_membership.py) (sourced once from Wikipedia's "Nasdaq-100 § Annual changes" section, 2007–present) and emits a CSV with one row per `(ticker, span)`. Tickers that joined before the changelog window get `start_date = 2000-01-01`. To refresh after a new reconstitution, append the change to the `CHANGES` list and re-run.
+
+**Manual.** Edit the CSV directly. Columns: `ticker, start_date, end_date` (empty `end_date` = still a constituent).
+
+**Survivorship-bias impact (measured):** running the same backtest with PIT membership vs the default current-snapshot universe drops the headline CAGR by ~25–30 pp (e.g. 83% → 58%) while leaving Sharpe nearly unchanged. The excess return shrinks; the strategy quality doesn't. See [`summary.md`](summary.md) for the headline numbers.
+
+The auto-built table excludes ~16 tickers whose ends Wikipedia doesn't capture as discrete "removed" events (renames like FB→META, PCLN→BKNG, KFT split, WFMI acquired by AMZN, etc.). Those leave a small residual bias; add the missing rows by hand if you need them.
 
 ## Tests
 

@@ -12,6 +12,7 @@
 # monthly cron (which calls /api/picks?refresh=1).
 !**/data/raw_prices/
 !**/data/raw_prices/*.csv
+!**/data/nasdaq100_membership.csv
 
 # Python
 __pycache__/

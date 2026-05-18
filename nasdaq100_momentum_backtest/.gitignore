@@ -12,3 +12,4 @@ __pycache__/
 # Exception: ship a seed price cache for fast cold-starts on Render.
 !data/raw_prices/
 !data/raw_prices/*.csv
+!data/nasdaq100_membership.csv

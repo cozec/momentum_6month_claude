@@ -176,7 +176,7 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
 
 ## Caveats
 
-1. **Survivorship bias** — current-constituents universe overstates strategy returns. To get a clean number, supply historical Nasdaq-100 membership in `data/nasdaq100_membership.csv` and run with `--use-historical-membership`. The QQQ and TQQQ buy-and-hold figures are not affected. The grid-search experiment quantified this: dropping post-2018 index additions cut the headline CAGR from ~78% to ~47% (a ~31 pp survivorship premium).
+1. **Survivorship bias** — current-constituents universe overstates strategy returns. The grid-search experiment first estimated this at ~31 pp (dropping post-2018 index additions cut CAGR from ~78% to ~47%). With a Wikipedia-sourced PIT membership CSV (`python scripts/build_membership.py` then `--use-historical-membership`), the measured delta is ~25 pp: **CAGR 83.4% → 57.7%, Sharpe 1.43 → 1.36, max DD -36.5% → -30.6%** over the same 117-rebalance window. Sharpe and DD barely move — the strategy *quality* is intact; the excess return is what shrinks. QQQ and TQQQ buy-and-hold figures are unaffected.
 2. **Leverage decay** — TQQQ resets exposure daily, so over multi-month windows the return is path-dependent and typically less than 3× the QQQ return. The realized -80% drawdown is the worst-case manifestation of that path dependence.
 3. **Concentration risk** — top-3 equal-weight is highly concentrated; the realized volatility reflects that.
 4. **Execution** — fills assumed at the first-day adjusted close with 0 bps friction. Real capacity, market impact, and tax effects are not modelled; at ~72%/mo turnover, a 10 bps round-trip would shave ~0.86 pp/yr off the CAGR.
