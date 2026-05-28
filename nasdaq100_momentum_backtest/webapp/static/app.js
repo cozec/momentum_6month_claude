@@ -165,6 +165,180 @@ function renderOpen(root, data) {
   }
 }
 
+// Cache of {strategyId -> {chart, series, activeTicker, abortController}}.
+const CHART_STATE = new WeakMap();
+
+async function loadCandles(ticker, signal) {
+  const resp = await fetch(`/api/ohlc?ticker=${encodeURIComponent(ticker)}&months=6`, {
+    cache: 'no-store',
+    signal,
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} from /api/ohlc`);
+  const json = await resp.json();
+  return (json.candles || [])
+    .filter(c => c.open != null && c.high != null && c.low != null && c.close != null)
+    .map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close }));
+}
+
+function ensureChart(root) {
+  let state = CHART_STATE.get(root);
+  if (state && state.chart) return state;
+  const container = root.querySelector('[data-el="chart-container"]');
+  if (!container || !window.LightweightCharts) return null;
+  container.style.position = 'relative';
+  const chart = window.LightweightCharts.createChart(container, {
+    layout: { background: { color: '#FFFFFF' }, textColor: '#475569', fontFamily: 'Inter, system-ui, sans-serif' },
+    grid: { vertLines: { color: '#F1F5F9' }, horzLines: { color: '#F1F5F9' } },
+    rightPriceScale: { borderColor: '#E2E8F0' },
+    timeScale: { borderColor: '#E2E8F0', timeVisible: false, secondsVisible: false },
+    crosshair: { mode: window.LightweightCharts.CrosshairMode.Normal },
+    autoSize: true,
+  });
+  const series = chart.addCandlestickSeries({
+    upColor: '#10B981', downColor: '#EF4444',
+    borderUpColor: '#10B981', borderDownColor: '#EF4444',
+    wickUpColor: '#10B981', wickDownColor: '#EF4444',
+  });
+
+  // Overlay for the vertical "entry" line — positioned in CSS px via
+  // chart.timeScale().timeToCoordinate() and refreshed on pan/zoom/resize.
+  const overlay = document.createElement('div');
+  overlay.dataset.el = 'entry-line';
+  overlay.style.cssText =
+    'position:absolute;top:0;width:2px;background:#6366F1;pointer-events:none;' +
+    'display:none;z-index:2;box-shadow:0 0 0 1px rgba(255,255,255,0.6);';
+  const label = document.createElement('div');
+  label.dataset.el = 'entry-label';
+  label.style.cssText =
+    'position:absolute;top:4px;left:6px;font:600 10px Inter,system-ui,sans-serif;' +
+    'color:#fff;background:#6366F1;padding:2px 6px;border-radius:4px;' +
+    'white-space:nowrap;letter-spacing:0.04em;text-transform:uppercase;';
+  overlay.appendChild(label);
+  container.appendChild(overlay);
+
+  state = { chart, series, activeTicker: null, entryDate: null, abortController: null };
+  CHART_STATE.set(root, state);
+
+  const reposition = () => positionEntryLine(root);
+  chart.timeScale().subscribeVisibleTimeRangeChange(reposition);
+  if (window.ResizeObserver) new ResizeObserver(reposition).observe(container);
+  return state;
+}
+
+function positionEntryLine(root) {
+  const state = CHART_STATE.get(root);
+  if (!state) return;
+  const container = root.querySelector('[data-el="chart-container"]');
+  const overlay = container && container.querySelector('[data-el="entry-line"]');
+  if (!overlay) return;
+  const entry = state.entryDate;
+  if (!entry) { overlay.style.display = 'none'; return; }
+
+  // Snap forward to the first trading day if entry falls on a weekend/holiday.
+  const ts = state.chart.timeScale();
+  let coord = ts.timeToCoordinate(entry);
+  if (coord == null) {
+    const d = new Date(entry + 'T00:00');
+    for (let i = 1; i <= 7 && coord == null; i++) {
+      d.setDate(d.getDate() + 1);
+      coord = ts.timeToCoordinate(d.toISOString().slice(0, 10));
+    }
+  }
+  if (coord == null) { overlay.style.display = 'none'; return; }
+
+  // Leave room for the time axis at the bottom (~28 px in default theme).
+  const timeAxisPx = 28;
+  overlay.style.display = 'block';
+  overlay.style.left = `${Math.round(coord)}px`;
+  overlay.style.height = `${Math.max(0, container.clientHeight - timeAxisPx)}px`;
+  const label = overlay.querySelector('[data-el="entry-label"]');
+  if (label) {
+    const dt = new Date(entry + 'T00:00');
+    label.textContent =
+      `Entry ${dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  }
+}
+
+async function loadChartFor(root, ticker, entryDate) {
+  const state = ensureChart(root);
+  if (!state) return;
+  const status = root.querySelector('[data-el="chart-status"]');
+  if (state.abortController) state.abortController.abort();
+  state.abortController = new AbortController();
+  state.activeTicker = ticker;
+  if (entryDate !== undefined) state.entryDate = entryDate || null;
+  status.textContent = `loading ${ticker}…`;
+  try {
+    const data = await loadCandles(ticker, state.abortController.signal);
+    if (state.activeTicker !== ticker) return; // a newer click superseded us
+    if (!data.length) {
+      status.textContent = `no price data for ${ticker}`;
+      state.series.setData([]);
+      positionEntryLine(root);
+      return;
+    }
+    state.series.setData(data);
+    state.chart.timeScale().fitContent();
+    positionEntryLine(root);
+    const first = data[0], last = data[data.length - 1];
+    const pct = (last.close / first.open - 1);
+    const sign = pct >= 0 ? '+' : '';
+    status.textContent = `${ticker} · ${first.time} → ${last.time} · ${sign}${(pct * 100).toFixed(1)}% over window`;
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    status.textContent = `failed to load ${ticker}: ${e.message}`;
+  }
+}
+
+function renderChart(root, data) {
+  const section = root.querySelector('.strategy-chart');
+  if (!section) return;
+  const tabsEl = root.querySelector('[data-el="chart-tabs"]');
+  const open = data.open || [];
+  if (!open.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  const state = ensureChart(root);
+  const tickers = open.map(p => p.ticker);
+  const active = (state && tickers.includes(state.activeTicker)) ? state.activeTicker : tickers[0];
+  const entryDate = (data.open_meta && data.open_meta.entry_date) || (open[0] && open[0].date) || null;
+
+  tabsEl.innerHTML = tickers.map(t => {
+    const isActive = t === active;
+    const cls = isActive
+      ? 'bg-slate-900 text-white'
+      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200';
+    return `<button type="button" data-chart-ticker="${t}"
+      class="px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide ${cls}">${t}</button>`;
+  }).join('');
+
+  tabsEl.querySelectorAll('button[data-chart-ticker]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.chartTicker;
+      const s = ensureChart(root);
+      if (s) s.activeTicker = t;
+      loadChartFor(root, t, entryDate);
+      // Rebuild styling now that activeTicker has been updated.
+      tabsEl.querySelectorAll('button[data-chart-ticker]').forEach(b => {
+        const isActive = b.dataset.chartTicker === t;
+        b.className = `px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide ${
+          isActive ? 'bg-slate-900 text-white'
+                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+        }`;
+      });
+    });
+  });
+
+  // Only kick off a fetch when the active ticker actually changes (e.g. on
+  // the first render or when the open holdings rotate to a new set).
+  if (!state || state.activeTicker !== active || state.entryDate !== entryDate) {
+    if (state) state.activeTicker = active;
+    loadChartFor(root, active, entryDate);
+  }
+}
+
 function renderStats(root, data) {
   const s = data.stats || {};
   const strat = s.strategy || {};
@@ -268,6 +442,7 @@ async function load({ refresh = false } = {}) {
       if (!data) continue;
       renderNext(root, data);
       renderOpen(root, data);
+      renderChart(root, data);
       renderStats(root, data);
       renderHistory(root, data);
     }

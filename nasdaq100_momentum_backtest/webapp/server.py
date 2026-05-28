@@ -38,6 +38,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.backtest import run_backtest
 from src.config import BacktestConfig
+from src.download_data import _cache_covers, _download_one, _load_cached
 from src.metrics import calculate_summary_stats
 
 
@@ -260,6 +261,58 @@ def _get_cached_or_compute(
     with _CACHE_LOCK:
         _RESULT_CACHE[cache_key] = (now, payload)
     return payload
+
+
+@app.get("/api/ohlc")
+def api_ohlc(
+    ticker: str = Query(..., description="Ticker symbol, e.g. NVDA"),
+    months: int = Query(6, ge=1, le=60, description="Trailing window in calendar months"),
+    refresh: bool = Query(False, description="Force a fresh yfinance download"),
+) -> Dict[str, Any]:
+    """Return daily OHLCV bars for one ticker, used by the chart panel.
+
+    Reuses the same per-ticker CSV cache the backtest pipeline writes
+    to (``data/raw_prices/*.csv``). If the cache doesn't extend close
+    enough to today, fetch the missing slice and merge.
+    """
+    sym = ticker.strip().upper()
+    if not sym or not sym.replace(".", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail=f"Invalid ticker {ticker!r}")
+    today = pd.Timestamp.now().normalize()
+    start = today - pd.DateOffset(months=months)
+
+    cached = None if refresh else _load_cached(sym)
+    if cached is None or not _cache_covers(cached, start, today):
+        fetched = _download_one(sym, start, today)
+        if fetched is None or fetched.empty:
+            if cached is None or cached.empty:
+                raise HTTPException(status_code=404, detail=f"No price data for {sym}")
+        else:
+            cached = pd.concat([cached, fetched]) if cached is not None else fetched
+            cached = cached[~cached.index.duplicated(keep="last")].sort_index()
+
+    window = cached.loc[(cached.index >= start) & (cached.index <= today)]
+    if window.empty:
+        raise HTTPException(status_code=404, detail=f"No price data for {sym} in window")
+
+    candles: List[Dict[str, Any]] = []
+    for ts, row in window.iterrows():
+        candles.append({
+            "date": ts.strftime("%Y-%m-%d"),
+            "open": _safe_float(row.get("Open")),
+            "high": _safe_float(row.get("High")),
+            "low": _safe_float(row.get("Low")),
+            "close": _safe_float(row.get("Close")),
+            "volume": _safe_float(row.get("Volume")),
+        })
+    return {
+        "ticker": sym,
+        "months": months,
+        "first_date": candles[0]["date"],
+        "last_date": candles[-1]["date"],
+        "count": len(candles),
+        "candles": candles,
+    }
 
 
 @app.get("/api/picks")
