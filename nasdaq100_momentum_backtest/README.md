@@ -5,6 +5,8 @@ A Python backtesting tool that runs a monthly 6-month momentum rotation strategy
 ## Reference:
 https://www.xiaohongshu.com/explore/69fe40e30000000037037c0d?xsec_token=ABEtUGDxuYs9OY_3Aa3sxyRd1BAlYpUJgOeZagDNpkBIc=&xsec_source=pc_user
 
+https://www.xiaohongshu.com/explore/6a387a69000000000f005cdf?app_platform=ios&app_version=9.34.4&share_from_user_hidden=true&xsec_source=app_share&type=normal&xsec_token=CBRfxIGOSHc4yRd5reBhsg8iYRwuZFdEDCThG_PUBvoi0=&author_share=1&xhsshare=CopyLink&shareRedId=ODZFODc1Rzk2NzUyOTgwNjY0OTc1SD5P&apptime=1782169833&share_id=7a0598d010a24a40a25230ccdd66d41a
+
 
 ## Strategy
 
@@ -169,7 +171,17 @@ A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page that s
 - **Strategy A** — `L=6m / P=1m` (the project default / baseline).
 - **Strategy B** — `L=3m / P=2m` (the grid-search winner, kept on the page as an apples-to-apples comparison).
 
-Each section shows the current open holdings (with MTD return and "in progress" badge), summary stats (CAGR, Sharpe, max drawdown, win-rate vs QQQ), and a vertical feed of the last 12 completed rebalances. Run locally:
+Each section shows:
+
+- **Current open holdings** — with MTD return and an "in progress" badge.
+- **Next month's planned picks** — entry-price estimate, momentum rank, and an MOC-order note so live trades line up with the backtest's first-trading-day fill assumption.
+- **Summary stats** — CAGR, Sharpe, max drawdown, win-rate vs QQQ.
+- **6-month daily candle chart** — an interactive candlestick panel (TradingView lightweight-charts) for the selected holding, with an entry marker and a ticker switcher across the current picks.
+- **Last 12 completed rebalances** — vertical feed with entry/exit prices and per-stock return.
+
+The webapp uses [point-in-time membership](#membership) (`use_historical_membership=True`) by default, so the numbers on the page are the survivorship-free ones (~25 pp lower CAGR than the snapshot universe — see [`summary.md`](summary.md)). Both strategies are fetched in a single `/api/picks-multi` round-trip, and an in-process 5-minute cache (`CACHE_TTL_SECONDS` in [`webapp/server.py`](webapp/server.py)) keeps page refreshes near-instant. The candle chart panel pulls daily OHLCV bars per ticker from a separate `/api/ohlc?ticker=&months=` endpoint, which reuses the `data/raw_prices/*.csv` cache and fetches/merges any missing recent slice. The header **Refresh** button forces yfinance to re-download fresh prices and bypasses the cache.
+
+Run locally:
 
 ```bash
 source .venv/bin/activate
@@ -177,7 +189,9 @@ cd nasdaq100_momentum_backtest
 python run_webapp.py        # → http://127.0.0.1:8765
 ```
 
-The page re-runs the backtest pipeline on every load; refresh button forces yfinance to re-download fresh prices. On the first trading day of a new month, Strategy A's open position rolls to a new entry; Strategy B holds for two months so it only rolls every second first-trading-day.
+If `python` isn't on your PATH (macOS default), use `python3 run_webapp.py` or the venv interpreter directly (`.venv/bin/python run_webapp.py`). Override host/port with `MOMENTUM_HOST` / `MOMENTUM_PORT`; set `MOMENTUM_RELOAD=1` for uvicorn auto-reload during development.
+
+On the first trading day of a new month, Strategy A's open position rolls to a new entry; Strategy B holds for two months so it only rolls every second first-trading-day.
 
 ## One-click deploy (Render + GitHub Actions + Resend)
 

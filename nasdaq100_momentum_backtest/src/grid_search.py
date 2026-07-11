@@ -159,6 +159,7 @@ def run_grid(
     prices = download_price_data(
         all_tickers, config.start_date, config.end_date,
         force_refresh=config.force_refresh,
+        full_refresh=config.full_refresh,
     )
     monthly_returns = calculate_monthly_returns(prices)
     first_days = get_first_trading_days(prices)

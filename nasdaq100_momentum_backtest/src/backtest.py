@@ -120,6 +120,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         config.start_date,
         config.end_date,
         force_refresh=config.force_refresh,
+        full_refresh=config.full_refresh,
     )
     LOGGER.info(
         "Downloaded %d trading days for %d tickers",

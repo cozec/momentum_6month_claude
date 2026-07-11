@@ -69,6 +69,26 @@
         <p class="text-xs text-slate-500 mt-0.5">L=6m / P=1m  ·  baseline / project default</p>
       </div>
 
+      <div class="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">How this strategy works</h3>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          On the first trading day of each month, rank every point-in-time Nasdaq-100 member by
+          <span class="font-medium text-slate-800">6-month momentum</span> — the average of its last six
+          monthly returns, excluding the current month to avoid look-ahead. Buy the
+          <span class="font-medium text-slate-800">top 3</span>, equal-weighted (⅓ each), and hold for one
+          month; then re-rank and rotate. The universe uses historical (point-in-time) index membership to
+          avoid survivorship bias, and results are benchmarked against buy-and-hold
+          <span class="font-medium text-slate-800">QQQ</span> and 3× <span class="font-medium text-slate-800">TQQQ</span>.
+        </p>
+      </div>
+
+      <section class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+      </section>
+
       <section class="strategy-next mb-4 hidden">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
@@ -106,13 +126,6 @@
           <div data-el="chart-container" class="w-full h-[768px]"></div>
           <div data-el="chart-status" class="mt-2 text-[11px] text-slate-400"></div>
         </div>
-      </section>
-
-      <section class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
       </section>
 
       <section class="strategy-history">

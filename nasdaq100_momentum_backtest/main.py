@@ -56,6 +56,12 @@ def parse_args() -> argparse.Namespace:
         help="Load membership from data/nasdaq100_membership.csv instead of the "
              "current-constituents snapshot.",
     )
+    parser.add_argument(
+        "--full-refresh", action="store_true",
+        help="Ignore the price cache and re-download the full history, "
+             "overwriting cached files. Use to pick up split/dividend "
+             "re-adjustments an incremental refresh would miss.",
+    )
     return parser.parse_args()
 
 
@@ -73,6 +79,7 @@ def main() -> int:
         slippage_bps=args.slippage_bps,
         initial_capital=args.initial_capital,
         use_historical_membership=args.use_historical_membership,
+        full_refresh=args.full_refresh,
     )
 
     ensure_dir(OUTPUTS_DIR)

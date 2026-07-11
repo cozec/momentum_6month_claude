@@ -63,6 +63,7 @@ class BacktestConfig:
     score_method: str = "average_monthly_return"
     use_historical_membership: bool = False
     force_refresh: bool = False
+    full_refresh: bool = False
     tickers: List[str] = field(default_factory=lambda: list(CURRENT_NASDAQ100))
 
     def transaction_cost_rate(self) -> float:
