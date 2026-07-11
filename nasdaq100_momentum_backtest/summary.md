@@ -222,6 +222,15 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
 
 **Behaviour on the 1st of each month:** Strategy A rebalances (new picks scored on the new first-trading-day, MTD ≈ 0% on entry). Strategy B holds for two months, so on every *other* 1st it rolls; in between it just shows the same picks with an updated period-to-date return. The completed previous-month holding becomes a new row in the dashboard's "Past rebalances" feed and is reflected in the next email.
 
+### Dashboard UX & refresh performance
+
+- **Strategy A explainer** — a "How this strategy works" panel sits directly under the Strategy A header (with the summary-stats row — CAGR, Sharpe, max DD, win-rate vs QQQ — moved to just beneath it), so the page is self-describing without the README.
+- **Forced-refresh speedup** — the header **Refresh** button (`refresh=1`) re-downloads fresh prices and bypasses the 5-min result cache. It used to make ~200 sequential yfinance calls (two strategies × ~100 tickers) and took tens of seconds. Now:
+  - the universe is fetched **concurrently** (8-worker thread pool) in `download_price_data`, and
+  - a 60 s in-memory **price-panel cache** lets the second strategy in the same page load reuse the first's download instead of re-fetching it.
+  - Switched the per-ticker fetch from `yf.download` to the thread-safe `Ticker.history` API (`yf.download` writes module-global state and corrupts frames under concurrency), stripping its tz so it still merges with the naive-dated CSV cache.
+  - **Result:** a full forced refresh of 103 tickers now completes in **~2.4 s** end-to-end (first strategy ~2.3 s of parallel download, second strategy ~0.07 s from the panel cache); a normal cached reload is ~1.5 ms. All 23 unit tests still pass.
+
 ## Caveats
 
 1. **Survivorship bias** — current-constituents universe overstates strategy returns. The grid-search experiment first estimated this at ~31 pp (dropping post-2018 index additions cut CAGR from ~78% to ~47%). With a Wikipedia-sourced PIT membership CSV (`python scripts/build_membership.py` then `--use-historical-membership`), the measured delta is ~25 pp: **CAGR 83.4% → 57.7%, Sharpe 1.43 → 1.36, max DD -36.5% → -30.6%** over the same 117-rebalance window. Sharpe and DD barely move — the strategy *quality* is intact; the excess return is what shrinks. QQQ and TQQQ buy-and-hold figures are unaffected.
