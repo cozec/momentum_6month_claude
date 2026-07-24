@@ -47,6 +47,30 @@ TODAY = pd.Timestamp.now().normalize()
 # (and the gaps between them) are detected automatically from the pick chain.
 CAMPAIGNS = [
     {
+        "ticker": "NVDA",
+        "name": "NVIDIA",
+        "subtitle": "The first breakout — GPUs go mainstream across gaming, data-center and crypto (2016–17)",
+        "window": ("2016-07-15", "2017-06-01"),
+    },
+    {
+        "ticker": "PYPL",
+        "name": "PayPal",
+        "subtitle": "Fintech momentum as digital payments scaled — a steady late-2017 climb",
+        "window": ("2017-08-01", "2018-02-15"),
+    },
+    {
+        "ticker": "NFLX",
+        "name": "Netflix",
+        "subtitle": "Peak streaming euphoria — rode it up and rotated out before the Q4-2018 crash",
+        "window": ("2018-02-01", "2018-10-01"),
+    },
+    {
+        "ticker": "MELI",
+        "name": "MercadoLibre",
+        "subtitle": "Latin America's e-commerce & payments compounder — a 2019 momentum leader",
+        "window": ("2019-02-01", "2019-10-01"),
+    },
+    {
         "ticker": "TSLA",
         "name": "Tesla",
         "subtitle": "The pandemic-era moonshot — a top pick every month of 2020",
@@ -57,6 +81,12 @@ CAMPAIGNS = [
         "name": "Tesla",
         "subtitle": "The flip side of momentum — a choppy, range-bound 2021 of whipsaws",
         "window": ("2021-01-01", "2022-01-01"),
+    },
+    {
+        "ticker": "CEG",
+        "name": "Constellation Energy",
+        "subtitle": "Nuclear power in the 2022 bear market — momentum found one of the year's rare winners",
+        "window": ("2022-07-01", "2023-01-15"),
     },
     {
         "ticker": "NVDA",
@@ -351,8 +381,11 @@ def build_html(cards):
     .wrap{max-width:960px;margin:0 auto;padding:40px 22px 64px;}
     header.top h1{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;}
     header.top p{color:var(--muted);margin:0;font-size:15px;}
-    .note{margin:18px 0 30px;padding:12px 15px;border:1px solid var(--line);border-radius:10px;
+    .note{margin:14px 0 30px;padding:12px 15px;border:1px solid var(--line);border-radius:10px;
       background:#fff;color:#475569;font-size:13px;}
+    .warn{margin:18px 0 0;padding:14px 16px;border:1px solid #f59e0b;border-left:5px solid #f59e0b;
+      border-radius:10px;background:#fffbeb;color:#7c4a03;font-size:13px;line-height:1.55;}
+    .warn b{color:#b45309;}
     .case{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px;margin:26px 0;
       box-shadow:0 1px 2px rgba(15,23,42,.04);}
     .case-head{display:flex;gap:16px;align-items:center;margin-bottom:18px;}
@@ -393,9 +426,18 @@ def build_html(cards):
 <body><div class="wrap">
   <header class="top">
     <h1>Strategy in Action — Rebalance Case Studies</h1>
-    <p>How the Nasdaq-100 6-month momentum rotation actually traded some of its biggest winners
-       across 2020–2026 — month by month, with the whipsaws too.</p>
+    <p>How the Nasdaq-100 6-month momentum rotation actually traded its standout names across the full
+       2016–2026 backtest — month by month, one stock at a time, with the whipsaws too.</p>
   </header>
+  <div class="warn">
+    <b>&#9888;&#65039; Cherry-picked examples — read with caution.</b> These are hand-selected
+    single-stock stories, chosen with hindsight to illustrate how the rebalance mechanics work — a few
+    of the strategy's biggest winners plus one deliberate whipsaw. They are <b>not representative</b> of
+    overall performance: most trades are far smaller, the strategy has plenty of losing positions and
+    drawdowns, and picking the best names after the fact overstates results. For unbiased, portfolio-level
+    numbers (CAGR, Sharpe, max drawdown, win-rate vs QQQ) see the full backtest in <code>summary.md</code>
+    and the live dashboard. Past backtested performance does not predict future returns.
+  </div>
   <div class="note">
     Each case study follows one stock through the strategy's <b>monthly top-3 rebalances</b>: it enters on the
     first trading day of a month, is re-scored and rolled each month it stays in the top 3, and is sold the month
@@ -412,7 +454,8 @@ def build_html(cards):
 
 def main():
     picks = load_trades()
-    cards = [campaign_html(campaign_data(c, picks)) for c in CAMPAIGNS]
+    # CAMPAIGNS is authored oldest->newest for readability; present latest first.
+    cards = [campaign_html(campaign_data(c, picks)) for c in reversed(CAMPAIGNS)]
     with open(OUT_HTML, "w") as f:
         f.write(build_html(cards))
     print("Wrote", OUT_HTML)
