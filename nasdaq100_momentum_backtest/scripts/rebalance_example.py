@@ -43,24 +43,44 @@ MUTED = "#64748b"
 
 TODAY = pd.Timestamp.now().normalize()
 
-# Each case study is a set of hold "segments" (continuous monthly holds).
+# Each case study is one ticker over a date window; continuous monthly holds
+# (and the gaps between them) are detected automatically from the pick chain.
 CAMPAIGNS = [
     {
-        "ticker": "MU",
-        "name": "Micron Technology",
-        "subtitle": "Riding the AI-memory super-cycle — bought, sold near the top, bought back",
-        "segments": [
-            {"start": "2025-11-01", "end": "2026-05-15"},   # Nov 2025 → sold May 1 2026
-            {"start": "2026-05-16", "end": "2026-12-31"},   # re-entered Jun 1 2026 (open)
-        ],
+        "ticker": "TSLA",
+        "name": "Tesla",
+        "subtitle": "The pandemic-era moonshot — a top pick every month of 2020",
+        "window": ("2020-01-01", "2021-01-01"),
+    },
+    {
+        "ticker": "TSLA",
+        "name": "Tesla",
+        "subtitle": "The flip side of momentum — a choppy, range-bound 2021 of whipsaws",
+        "window": ("2021-01-01", "2022-01-01"),
+    },
+    {
+        "ticker": "NVDA",
+        "name": "NVIDIA",
+        "subtitle": "The AI awakening — the strategy caught the 2023 breakout and held it",
+        "window": ("2023-03-01", "2023-12-10"),
+    },
+    {
+        "ticker": "NVDA",
+        "name": "NVIDIA",
+        "subtitle": "AI leadership continues — held through 2024, re-entered in November",
+        "window": ("2024-03-01", "2024-12-10"),
     },
     {
         "ticker": "PLTR",
         "name": "Palantir",
         "subtitle": "A momentum leader the strategy rode through the summer of 2025",
-        "segments": [
-            {"start": "2025-07-01", "end": "2025-11-10"},   # Jul → Oct 2025 (sold Nov 3)
-        ],
+        "window": ("2025-07-01", "2025-11-10"),
+    },
+    {
+        "ticker": "MU",
+        "name": "Micron Technology",
+        "subtitle": "Riding the AI-memory super-cycle — bought, sold near the top, bought back",
+        "window": ("2025-11-01", "2026-12-31"),
     },
 ]
 
@@ -90,12 +110,25 @@ def load_prices(ticker):
     return df.sort_values("Date").reset_index(drop=True)
 
 
-def seg_rows(picks, ticker, start, end):
-    """Monthly picks for `ticker` whose rebalance falls in [start, end)."""
-    m = ((picks["ticker"] == ticker)
-         & (picks["rebalance_date"] >= start)
-         & (picks["rebalance_date"] < end))
-    return picks[m].sort_values("rebalance_date").reset_index(drop=True)
+def split_holds(rows):
+    """Split a ticker's picks into continuous holds.
+
+    Consecutive monthly rolls chain (each pick's entry is the prior pick's
+    exit), so a break appears whenever a pick's rebalance date doesn't equal
+    the previous pick's exit date — i.e. the stock left the basket for a
+    month or more, then came back.
+    """
+    holds, cur = [], None
+    for _, r in rows.iterrows():
+        if cur is not None and r["rebalance_date"] != cur[-1]["exit_date"]:
+            holds.append(cur)
+            cur = None
+        if cur is None:
+            cur = []
+        cur.append(r)
+    if cur:
+        holds.append(cur)
+    return [pd.DataFrame(h).reset_index(drop=True) for h in holds]
 
 
 def fmt_price(x):
@@ -165,7 +198,9 @@ def make_chart(ticker, name, segments_rows, px):
                         fontsize=8.5, fontweight="bold", color=RED)
 
     ax.set_ylabel("Price ($)", fontsize=9, color=MUTED)
-    ax.xaxis.set_major_locator(mdates.MonthLocator())
+    span_months = max(1, (x1 - x0).days / 30.4)
+    iv = 1 if span_months <= 9 else (2 if span_months <= 18 else 3)
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=iv))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax.tick_params(labelsize=8, colors=MUTED)
     for s in ("top", "right"):
@@ -185,12 +220,13 @@ def make_chart(ticker, name, segments_rows, px):
 def campaign_data(cfg, picks):
     ticker = cfg["ticker"]
     px = load_prices(ticker)
-    seg_rows_list, seg_meta = [], []
-    for seg in cfg["segments"]:
-        rows = seg_rows(picks, ticker, seg["start"], seg["end"])
-        if not len(rows):
-            continue
-        seg_rows_list.append(rows)
+    lo, hi = cfg["window"]
+    m = ((picks["ticker"] == ticker)
+         & (picks["rebalance_date"] >= lo)
+         & (picks["rebalance_date"] < hi))
+    rows_all = picks[m].sort_values("rebalance_date").reset_index(drop=True)
+    seg_rows_list, seg_meta = split_holds(rows_all), []
+    for rows in seg_rows_list:
         entry_p = rows.iloc[0]["entry_price"]
         exit_p = rows.iloc[-1]["exit_price"]
         seg_meta.append({
@@ -357,7 +393,8 @@ def build_html(cards):
 <body><div class="wrap">
   <header class="top">
     <h1>Strategy in Action — Rebalance Case Studies</h1>
-    <p>How the Nasdaq-100 6-month momentum rotation actually traded two signature names, month by month.</p>
+    <p>How the Nasdaq-100 6-month momentum rotation actually traded some of its biggest winners
+       across 2020–2026 — month by month, with the whipsaws too.</p>
   </header>
   <div class="note">
     Each case study follows one stock through the strategy's <b>monthly top-3 rebalances</b>: it enters on the
