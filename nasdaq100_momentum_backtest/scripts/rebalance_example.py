@@ -392,7 +392,8 @@ def build_html(cards):
     .tk{font-size:15px;font-weight:800;color:#fff;background:var(--accent);border-radius:10px;
       padding:10px 12px;letter-spacing:.03em;}
     .case-head h2{margin:0;font-size:21px;font-weight:800;}
-    .case-head .sub{margin:2px 0 0;color:var(--muted);font-size:13.5px;}
+    .case-head .sub{display:inline-block;margin:6px 0 0;color:#1f4e79;font-size:13px;font-weight:600;
+      background:#e7f0fa;border:1px solid #cfe0f2;padding:4px 11px;border-radius:7px;line-height:1.4;}
     .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;}
     .tile{border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:#fbfdff;}
     .tile-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
