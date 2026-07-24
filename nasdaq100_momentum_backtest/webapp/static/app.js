@@ -25,6 +25,11 @@ function fmtPct(x, digits = 1) {
   return `${sign}${(x * 100).toFixed(digits)}%`;
 }
 
+function fmtPrice(x) {
+  if (x === null || x === undefined || Number.isNaN(x)) return '—';
+  return x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function fmtDate(s) {
   if (!s) return '';
   const d = new Date(s + 'T00:00');
@@ -76,6 +81,14 @@ function pickCard(pick, opts = {}) {
   const mtdBadge = isOpen
     ? `<span class="inline-block mt-2 text-[10px] font-semibold tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">MTD</span>`
     : '';
+  // Current holdings: show the first-of-month entry price and the latest price
+  // beside the MTD return.
+  const priceBlock = (isOpen && pick.entry_price != null && pick.latest_price != null)
+    ? `<div class="text-[11px] text-slate-500 leading-tight text-right">
+         <div><span class="text-slate-400">entry</span> $${fmtPrice(pick.entry_price)}</div>
+         <div><span class="text-slate-400">current</span> $${fmtPrice(pick.latest_price)}</div>
+       </div>`
+    : '';
   return `
     <div class="card rounded-xl ${border} bg-white overflow-hidden">
       <div class="accent-stripe" style="background:${color}"></div>
@@ -84,8 +97,11 @@ function pickCard(pick, opts = {}) {
           <div class="text-3xl font-bold text-slate-900">${pick.ticker}</div>
           <div class="text-[10px] text-slate-400 font-medium">#${pick.rank}</div>
         </div>
-        <div class="mt-1 text-lg font-semibold ${retColor}">
-          ${fmtPct(pick.stock_return)}
+        <div class="mt-1 flex items-end justify-between gap-2">
+          <div class="text-lg font-semibold ${retColor}">
+            ${fmtPct(pick.stock_return)}
+          </div>
+          ${priceBlock}
         </div>
         ${mtdBadge}
       </div>
