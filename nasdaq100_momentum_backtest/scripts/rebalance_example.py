@@ -111,7 +111,10 @@ def make_chart(ticker, name, segments_rows, px):
     starts = [r.iloc[0]["rebalance_date"] for r in segments_rows if len(r)]
     last = segments_rows[-1]
     end_anchor = last.iloc[-1]["exit_date"] if len(last) else TODAY
-    x0 = min(starts) - pd.Timedelta(days=25)
+    first_entry = min(starts)
+    # Show the 7 months of price history before the first buy — the strategy
+    # scores on the prior 6 months, so this is the run-up it "saw".
+    x0 = first_entry - pd.DateOffset(months=7)
     x1 = min(end_anchor + pd.Timedelta(days=14), TODAY)
     p = px[(px["Date"] >= x0) & (px["Date"] <= x1)]
 
@@ -119,6 +122,14 @@ def make_chart(ticker, name, segments_rows, px):
     ax.plot(p["Date"], p["Close"], color=ACCENT, lw=1.8, zorder=3)
     ax.fill_between(p["Date"], p["Close"], p["Close"].min(),
                     color=ACCENT, alpha=0.06, zorder=1)
+
+    # Shade the 6-month momentum lookback window that drove the first pick.
+    lb_start = first_entry - pd.DateOffset(months=6)
+    ax.axvspan(lb_start, first_entry, color="#94a3b8", alpha=0.12, zorder=0)
+    ax.annotate("6-mo momentum\nlookback",
+                xy=(lb_start + (first_entry - lb_start) / 2, ax.get_ylim()[1]),
+                xytext=(0, -3), textcoords="offset points",
+                ha="center", va="top", fontsize=7.5, color=MUTED)
 
     for rows in segments_rows:
         if not len(rows):
