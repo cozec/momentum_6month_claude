@@ -419,7 +419,13 @@ def _signal_locked_for_next_entry(
     if prices.empty:
         return False
     last_data = pd.Timestamp(prices.index.max())
-    prev_month_anchor = next_entry - pd.Timedelta(days=1)
+    # Anchor to the last calendar day of the month *before* next_entry's month.
+    # Subtracting a day from next_entry directly is wrong when the first
+    # trading day isn't the 1st (e.g. Aug 3 after a weekend) — that would
+    # stay in the same month and the signal would never lock.
+    prev_month_anchor = (
+        pd.Timestamp(next_entry.year, next_entry.month, 1) - pd.Timedelta(days=1)
+    )
     in_prev_month = (
         last_data.year == prev_month_anchor.year
         and last_data.month == prev_month_anchor.month

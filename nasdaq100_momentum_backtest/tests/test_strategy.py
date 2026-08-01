@@ -203,6 +203,15 @@ class TestSignalLockedCheck(unittest.TestCase):
             _signal_locked_for_next_entry(prices, pd.Timestamp("2026-07-01"))
         )
 
+    def test_locked_when_month_starts_on_weekend(self):
+        # 2026-08-01 is a Saturday, so the first trading day of August is
+        # Mon 2026-08-03. Data through Fri 2026-07-31 (last trading day of
+        # July) must lock the August signal.
+        prices = self._prices_ending("2026-07-31")
+        self.assertTrue(
+            _signal_locked_for_next_entry(prices, pd.Timestamp("2026-08-03"))
+        )
+
     def test_memorial_day_landing_on_31st(self):
         # 2027-05-31 is a Monday = Memorial Day. Last trading day of May 2027
         # is Fri 2027-05-28. The generic BDay walks May 28 → May 31 (same
