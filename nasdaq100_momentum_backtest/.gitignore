@@ -13,3 +13,4 @@ __pycache__/
 !data/raw_prices/
 !data/raw_prices/*.csv
 !data/nasdaq100_membership.csv
+!data/sp500_constituents.csv
