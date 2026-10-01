@@ -62,10 +62,10 @@
     <!-- error banner -->
     <div id="error" class="hidden mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"></div>
 
-    <!-- strategy A: baseline L=6m/P=1m -->
-    <div id="strategy-A" data-lookback="6" data-period="1" class="strategy mb-12">
+    <!-- strategy A: Nasdaq-100 baseline L=6m/P=1m -->
+    <div id="strategy-A" data-strategy-id="nasdaq100" data-lookback="6" data-period="1" class="strategy mb-12">
       <div class="mb-5">
-        <h2 class="text-xl font-bold text-slate-900">Strategy A · 6-month momentum, monthly rebalance</h2>
+        <h2 class="text-xl font-bold text-slate-900">Strategy A · Nasdaq-100 · 6-month momentum, monthly rebalance</h2>
         <p class="text-xs text-slate-500 mt-0.5">L=6m / P=1m  ·  baseline / project default</p>
       </div>
 
@@ -139,12 +139,34 @@
       </section>
     </div>
 
-    <!-- strategy B: grid-best L=3m/P=2m -->
-    <div id="strategy-B" data-lookback="3" data-period="2" class="strategy">
+    <!-- strategy B: S&P 500, deduped against the Nasdaq-100 basket -->
+    <div id="strategy-B" data-strategy-id="sp500" data-lookback="6" data-period="1" class="strategy">
       <div class="mb-5">
-        <h2 class="text-xl font-bold text-slate-900">Strategy B · 3-month momentum, bi-monthly rebalance</h2>
-        <p class="text-xs text-slate-500 mt-0.5">L=3m / P=2m  ·  grid-search winner (in &amp; out of sample)</p>
+        <h2 class="text-xl font-bold text-slate-900">Strategy B · S&amp;P 500 (ex Nasdaq-100 picks) · 6-month momentum, monthly rebalance</h2>
+        <p class="text-xs text-slate-500 mt-0.5">L=6m / P=1m  ·  same rules, broader universe, complementary basket</p>
       </div>
+
+      <div class="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">How this strategy works</h3>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          The exact same rules as Strategy A — rank by
+          <span class="font-medium text-slate-800">6-month momentum</span>, buy the
+          <span class="font-medium text-slate-800">top 3</span> equal-weighted, hold one month, rotate —
+          but over the <span class="font-medium text-slate-800">S&amp;P 500</span> universe. Because the
+          Nasdaq-100 sits inside the S&amp;P 500, each month this basket
+          <span class="font-medium text-slate-800">excludes the tickers Strategy A already holds</span>, so
+          the two baskets never overlap and together give a diversified 6-stock view. Same
+          <span class="font-medium text-slate-800">QQQ</span> / 3× <span class="font-medium text-slate-800">TQQQ</span>
+          benchmarks. (S&amp;P universe uses the current constituent snapshot.)
+        </p>
+      </div>
+
+      <section class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
+      </section>
 
       <section class="strategy-next mb-4 hidden">
         <div class="flex items-center gap-3 mb-3">
@@ -159,7 +181,7 @@
 
       <section class="mb-6 strategy-open">
         <div class="flex items-center gap-3 mb-3">
-          <div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+          <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Current Holdings <span data-el="open-entry-label" class="ml-2 text-slate-400 font-normal normal-case tracking-normal"></span>
           </h3>
@@ -183,13 +205,6 @@
           <div data-el="chart-container" class="w-full h-[768px]"></div>
           <div data-el="chart-status" class="mt-2 text-[11px] text-slate-400"></div>
         </div>
-      </section>
-
-      <section class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
-        <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
       </section>
 
       <section class="strategy-history">

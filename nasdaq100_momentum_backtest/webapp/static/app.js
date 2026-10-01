@@ -437,24 +437,17 @@ async function load({ refresh = false } = {}) {
 
   try {
     const strategyEls = Array.from(document.querySelectorAll('.strategy'));
-    // Build configs query like "6-1,3-2" from the DOM.
-    const configs = strategyEls
-      .map(r => `${r.dataset.lookback}-${r.dataset.period}`)
-      .join(',');
-    const params = new URLSearchParams({ configs });
+    const params = new URLSearchParams();
     if (refresh) params.set('refresh', '1');
-    const resp = await fetch(`/api/picks-multi?${params.toString()}`, { cache: 'no-store' });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} from /api/picks-multi`);
+    const resp = await fetch(`/api/dashboard?${params.toString()}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} from /api/dashboard`);
     const bundle = await resp.json();
     const list = bundle.strategies || [];
 
-    // Match each returned strategy back to its DOM container by label.
-    const byKey = new Map(
-      list.map(s => [`${s.strategy.lookback_months}-${s.strategy.rebalance_period_months}`, s])
-    );
+    // Match each returned strategy back to its DOM container by id.
+    const byId = new Map(list.map(s => [s.strategy.id, s]));
     for (const root of strategyEls) {
-      const key = `${root.dataset.lookback}-${root.dataset.period}`;
-      const data = byKey.get(key);
+      const data = byId.get(root.dataset.strategyId);
       if (!data) continue;
       renderNext(root, data);
       renderOpen(root, data);

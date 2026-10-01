@@ -77,29 +77,39 @@ def _safe_float(x: Any) -> Optional[float]:
         return None
 
 
-def _compute_payload(
-    lookback: int,
+_SP500_PATH = os.path.join(PROJECT_ROOT, "data", "sp500_constituents.csv")
+
+
+def _load_sp500() -> List[str]:
+    """Current S&P 500 constituents (scripts/build_sp500.py refreshes them)."""
+    return (
+        pd.read_csv(_SP500_PATH)["Symbol"].astype(str).str.upper().tolist()
+    )
+
+
+def _build_exclude_map(results: Dict[str, Any]) -> Dict[pd.Timestamp, set]:
+    """Map each rebalance date -> set of tickers a strategy picked (completed,
+    open, and next), so a second strategy can dedupe against it."""
+    m: Dict[pd.Timestamp, set] = {}
+    for key in ("selections", "open_position", "next_position"):
+        df = results.get(key)
+        if df is None or df.empty:
+            continue
+        dates = pd.to_datetime(df["rebalance_date"])
+        for dt, tk in zip(dates, df["ticker"]):
+            m.setdefault(pd.Timestamp(dt), set()).add(tk)
+    return m
+
+
+def _results_to_payload(
+    results: Dict[str, Any],
+    today: pd.Timestamp,
+    started: float,
     period: int,
     history: int,
-    refresh: bool,
-    today: pd.Timestamp,
+    strategy_meta: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Run the backtest pipeline for one (lookback, period) and return
-    the JSON payload. Heavy: ~0.5–2 s on a warm Render worker."""
-    started = time.time()
-    config = BacktestConfig(
-        start_date="2016-01-01",
-        end_date=today.strftime("%Y-%m-%d"),
-        force_refresh=refresh,
-        lookback_months=lookback,
-        rebalance_period_months=period,
-        # Use the point-in-time membership table (shipped at
-        # data/nasdaq100_membership.csv, rebuilt by scripts/
-        # build_membership.py). Removes ~25 pp of survivorship-bias
-        # premium that the current-snapshot universe would show.
-        use_historical_membership=True,
-    )
-    results = run_backtest(config)
+    """Turn a raw ``run_backtest`` result into the dashboard JSON payload."""
     selections: pd.DataFrame = results["selections"]
     portfolio: pd.DataFrame = results["portfolio_returns"]
     open_pos: Optional[pd.DataFrame] = results.get("open_position")
@@ -192,11 +202,7 @@ def _compute_payload(
         "as_of": today.strftime("%Y-%m-%d"),
         "computed_at": datetime.now().isoformat(timespec="seconds"),
         "took_seconds": round(time.time() - started, 2),
-        "strategy": {
-            "lookback_months": lookback,
-            "rebalance_period_months": period,
-            "label": f"L={lookback}m / P={period}m",
-        },
+        "strategy": strategy_meta,
         "completed": completed_payload,
         "open": open_payload,
         "open_meta": open_meta,
@@ -232,6 +238,76 @@ def _compute_payload(
                 else None
             ),
         },
+    }
+
+
+def _compute_payload(
+    lookback: int,
+    period: int,
+    history: int,
+    refresh: bool,
+    today: pd.Timestamp,
+) -> Dict[str, Any]:
+    """Run the Nasdaq-100 backtest for one (lookback, period) → JSON payload."""
+    started = time.time()
+    config = BacktestConfig(
+        start_date="2016-01-01",
+        end_date=today.strftime("%Y-%m-%d"),
+        force_refresh=refresh,
+        lookback_months=lookback,
+        rebalance_period_months=period,
+        use_historical_membership=True,
+    )
+    results = run_backtest(config)
+    meta = {
+        "id": f"L{lookback}-P{period}",
+        "lookback_months": lookback,
+        "rebalance_period_months": period,
+        "label": f"L={lookback}m / P={period}m",
+        "universe": "Nasdaq-100",
+    }
+    return _results_to_payload(results, today, started, period, history, meta)
+
+
+# Dashboard strategies: Nasdaq-100 (baseline) and S&P 500 deduped against it.
+_NASDAQ_META = {
+    "id": "nasdaq100", "lookback_months": 6, "rebalance_period_months": 1,
+    "label": "6-month momentum, monthly rebalance", "universe": "Nasdaq-100",
+}
+_SP500_META = {
+    "id": "sp500", "lookback_months": 6, "rebalance_period_months": 1,
+    "label": "6-month momentum, monthly rebalance",
+    "universe": "S&P 500 · excludes the Nasdaq-100 basket's picks",
+}
+
+
+def _compute_dashboard(
+    history: int, refresh: bool, today: pd.Timestamp
+) -> Dict[str, Any]:
+    """Compute both dashboard strategies. The S&P 500 basket is scored after
+    the Nasdaq-100 one and drops any ticker the Nasdaq basket already holds
+    that month, so the two baskets never overlap."""
+    end = today.strftime("%Y-%m-%d")
+    common = dict(
+        start_date="2016-01-01", end_date=end, force_refresh=refresh,
+        lookback_months=6, rebalance_period_months=1,
+    )
+    started_a = time.time()
+    res_a = run_backtest(BacktestConfig(use_historical_membership=True, **common))
+    payload_a = _results_to_payload(res_a, today, started_a, 1, history, dict(_NASDAQ_META))
+
+    exclude = _build_exclude_map(res_a)
+    started_b = time.time()
+    res_b = run_backtest(
+        BacktestConfig(tickers=_load_sp500(), use_historical_membership=False, **common),
+        exclude_by_date=exclude,
+    )
+    payload_b = _results_to_payload(res_b, today, started_b, 1, history, dict(_SP500_META))
+
+    return {
+        "as_of": today.strftime("%Y-%m-%d"),
+        "computed_at": datetime.now().isoformat(timespec="seconds"),
+        "strategies": [payload_a, payload_b],
     }
 
 
@@ -313,6 +389,30 @@ def api_ohlc(
         "count": len(candles),
         "candles": candles,
     }
+
+
+@app.get("/api/dashboard")
+def api_dashboard(
+    refresh: bool = Query(False, description="Re-download fresh prices"),
+    history: int = Query(12, ge=1, le=120, description="Past months to return"),
+) -> Dict[str, Any]:
+    """The two dashboard baskets in one call: Nasdaq-100, then S&P 500 deduped
+    against it. Cached like the other endpoints (5-min TTL, bypassed on refresh)."""
+    today = pd.Timestamp.now().normalize()
+    cache_key = ("dashboard", today.strftime("%Y-%m-%d"))
+    now = time.time()
+    if not refresh:
+        with _CACHE_LOCK:
+            entry = _RESULT_CACHE.get(cache_key)
+        if entry and now - entry[0] < CACHE_TTL_SECONDS:
+            out = dict(entry[1])
+            out["cache_hit"] = True
+            return out
+    out = _compute_dashboard(history, refresh, today)
+    out["cache_hit"] = False
+    with _CACHE_LOCK:
+        _RESULT_CACHE[cache_key] = (now, out)
+    return out
 
 
 @app.get("/api/picks")
