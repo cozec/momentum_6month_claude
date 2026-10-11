@@ -237,7 +237,17 @@ function ensureChart(root) {
 
   const reposition = () => positionEntryLine(root);
   chart.timeScale().subscribeVisibleTimeRangeChange(reposition);
-  if (window.ResizeObserver) new ResizeObserver(reposition).observe(container);
+  // A chart drawn while its tab is hidden has zero width, which squeezes the
+  // bars off-screen; refit it when the container becomes visible again.
+  let lastWidth = container.clientWidth;
+  if (window.ResizeObserver) new ResizeObserver(() => {
+    const width = container.clientWidth;
+    if (width > 0 && lastWidth === 0) {
+      requestAnimationFrame(() => chart.timeScale().fitContent());
+    }
+    lastWidth = width;
+    reposition();
+  }).observe(container);
   return state;
 }
 
@@ -360,7 +370,7 @@ function styleChartTabs(root, active) {
 }
 
 const TAG_STYLE = {
-  Buy: 'bg-emerald-100 text-emerald-800',
+  Buy: 'bg-emerald-600 text-white',
   Hold: 'bg-sky-100 text-sky-800',
   Watch: 'bg-amber-100 text-amber-800',
   Caution: 'bg-red-100 text-red-800',
@@ -424,13 +434,16 @@ function renderLeaderboard(root, data) {
     const prev = visible[i - 1];
     // Inline style: the tbody's divide-y rule would override a border class.
     const cutoff = prev && prev.held && !r.held ? 'border-top:2px solid #94A3B8' : '';
-    const bg = r.held ? 'bg-emerald-50/60' : '';
+    // Buy rows stand out (tint + left accent); the rest recede until hovered.
+    const isBuy = r.tag === 'Buy';
+    const rowCls = isBuy ? 'bg-emerald-50 hover:bg-emerald-100' : 'opacity-50 hover:opacity-100 hover:bg-slate-50';
+    const rowStyle = [cutoff, isBuy ? 'box-shadow:inset 3px 0 0 #059669' : ''].filter(Boolean).join(';');
     const width = Math.max(2, Math.round(100 * (r.momentum_score || 0) / maxScore));
     const held = r.held
       ? '<span class="ml-1.5 text-[9px] font-bold tracking-wider px-1 py-0.5 rounded bg-emerald-600 text-white">HELD</span>'
       : '';
     return `
-      <tr data-ticker="${r.ticker}" class="${bg} cursor-pointer hover:bg-slate-50" style="${cutoff}">
+      <tr data-ticker="${r.ticker}" class="${rowCls} cursor-pointer transition-opacity" style="${rowStyle}">
         <td class="px-3 py-2 text-right text-slate-400 tabular-nums">${r.rank}</td>
         <td class="px-3 py-2 whitespace-nowrap">
           <div class="flex items-center">
