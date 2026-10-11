@@ -43,6 +43,7 @@ from __future__ import annotations
 import csv
 import os
 import sys
+from datetime import date
 from typing import Dict, List, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -51,9 +52,12 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from src.config import CURRENT_NASDAQ100, MEMBERSHIP_CSV
+from src.download_data import download_price_data
 
 
 DEFAULT_HISTORY_START = "2000-01-01"
+# Prices are downloaded for every ticker that was a member at any point since.
+PRICE_START = "2016-01-01"
 
 
 # Sourced from the Wikipedia "Nasdaq-100 § Annual changes" tables.
@@ -249,6 +253,21 @@ def write_csv(spans: List[Tuple[str, str, str]], path: str) -> None:
             writer.writerow([ticker, start, end])
 
 
+def download_member_prices(spans: List[Tuple[str, str, str]]) -> None:
+    """Cache prices for every ticker that was a member since ``PRICE_START``.
+
+    Point-in-time backtests only consider former members that have a price
+    file; Yahoo no longer serves most delisted names, so those are reported
+    and skipped.
+    """
+    tickers = sorted({t for t, _, end in spans if not end or end >= PRICE_START})
+    end = date.today().isoformat()
+    panel = download_price_data(tickers, PRICE_START, end, force_refresh=False)
+    missing = sorted(set(tickers) - set(panel.columns))
+    print(f"  cached prices for {panel.shape[1]}/{len(tickers)} tickers; "
+          f"no Yahoo data for {len(missing)}: {', '.join(missing)}")
+
+
 def main() -> int:
     spans = build_spans()
     write_csv(spans, MEMBERSHIP_CSV)
@@ -258,6 +277,7 @@ def main() -> int:
     print(f"Wrote {MEMBERSHIP_CSV}")
     print(f"  {n_total} total spans  ({n_open} currently open, {n_closed} historical)")
     print(f"  current Nasdaq-100 from src/config.py has {len(CURRENT_NASDAQ100)} tickers")
+    download_member_prices(spans)
     return 0
 
 

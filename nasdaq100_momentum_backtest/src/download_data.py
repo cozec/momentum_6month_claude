@@ -14,7 +14,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -46,6 +46,11 @@ MAX_DOWNLOAD_WORKERS = 8
 _PANEL_CACHE: dict[tuple, tuple[float, pd.DataFrame]] = {}
 _PANEL_CACHE_TTL = 60.0
 _PANEL_LOCK = Lock()
+
+# Tickers whose refresh just failed (typically delisted) are served from the
+# cache for a while instead of paying the retry back-off on every request.
+_FAILED_REFRESH: dict[str, float] = {}
+_FAILED_REFRESH_TTL = 6 * 3600.0
 
 
 def _cache_path(ticker: str) -> str:
@@ -178,6 +183,7 @@ def download_price_data(
     end_date: str,
     force_refresh: bool = False,
     full_refresh: bool = False,
+    end_overrides: Optional[Dict[str, pd.Timestamp]] = None,
 ) -> pd.DataFrame:
     """Download adjusted price data for ``tickers``.
 
@@ -203,17 +209,26 @@ def download_price_data(
         dividend re-adjustments that an incremental update would miss
         (the provider re-adjusts the whole series, but a tail-only fetch
         leaves older cached bars on their previous adjustment basis).
+    end_overrides : Optional[Dict[str, pd.Timestamp]]
+        Earlier per-ticker end dates (capped at ``end_date``). Used for
+        former index members, which only need prices until shortly after
+        they left — so delisted names aren't re-requested on every run.
     """
     ensure_dir(RAW_PRICES_DIR)
     start = to_business_date(start_date)
     end = to_business_date(end_date)
     tickers = list(tickers)
+    ends = {
+        t: min(end, to_business_date((end_overrides or {}).get(t, end)))
+        for t in tickers
+    }
 
     # Serve an identical request built moments ago (the two dashboard
     # strategies share one universe) instead of re-fetching it.
     cache_key = (
         tuple(sorted({t.upper() for t in tickers})),
         start, end, force_refresh, full_refresh,
+        tuple(sorted((t, e) for t, e in ends.items() if e != end)),
     )
     now = time.time()
     with _PANEL_LOCK:
@@ -228,7 +243,7 @@ def download_price_data(
     workers = max(1, min(MAX_DOWNLOAD_WORKERS, len(tickers)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(_fetch_ticker_close, t, start, end, force_refresh, full_refresh): t
+            pool.submit(_fetch_ticker_close, t, start, ends[t], force_refresh, full_refresh): t
             for t in tickers
         }
         for fut in as_completed(futures):
@@ -268,7 +283,10 @@ def _fetch_ticker_close(
     # full_refresh discards the cache so the ticker is re-downloaded
     # from scratch and its file overwritten with re-adjusted bars.
     cached = None if full_refresh else _load_cached(ticker)
-    if not force_refresh and cached is not None and _cache_covers(cached, start, end):
+    recently_failed = time.time() - _FAILED_REFRESH.get(ticker, 0.0) < _FAILED_REFRESH_TTL
+    if cached is not None and (
+        recently_failed or (not force_refresh and _cache_covers(cached, start, end))
+    ):
         LOGGER.info("Using cached prices for %s", ticker)
         df = cached
     else:
@@ -309,6 +327,7 @@ def _fetch_ticker_close(
             # rather than dropping the ticker entirely.
             if cached is not None:
                 LOGGER.warning("Update failed for %s; using cached data", ticker)
+                _FAILED_REFRESH[ticker] = time.time()
                 df = cached
             else:
                 return None

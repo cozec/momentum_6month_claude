@@ -336,14 +336,7 @@ function renderChart(root, data) {
       const s = ensureChart(root);
       if (s) s.activeTicker = t;
       loadChartFor(root, t, entryDate);
-      // Rebuild styling now that activeTicker has been updated.
-      tabsEl.querySelectorAll('button[data-chart-ticker]').forEach(b => {
-        const isActive = b.dataset.chartTicker === t;
-        b.className = `px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide ${
-          isActive ? 'bg-slate-900 text-white'
-                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-        }`;
-      });
+      styleChartTabs(root, t);
     });
   });
 
@@ -355,10 +348,135 @@ function renderChart(root, data) {
   }
 }
 
+// Highlight the chart tab for ``active`` (none when it isn't a holding).
+function styleChartTabs(root, active) {
+  root.querySelectorAll('[data-el="chart-tabs"] button[data-chart-ticker]').forEach(b => {
+    const isActive = b.dataset.chartTicker === active;
+    b.className = `px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide ${
+      isActive ? 'bg-slate-900 text-white'
+               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+    }`;
+  });
+}
+
+const TAG_STYLE = {
+  Buy: 'bg-emerald-100 text-emerald-800',
+  Hold: 'bg-sky-100 text-sky-800',
+  Watch: 'bg-amber-100 text-amber-800',
+  Caution: 'bg-red-100 text-red-800',
+};
+
+// Per-strategy sector filter for the leaderboard (null = show all).
+const BOARD_FILTER = new WeakMap();
+
+function signedCell(x, { invert = false } = {}) {
+  if (x === null || x === undefined) return '<span class="text-slate-400">—</span>';
+  if (invert && x > -0.005) return '<span class="text-emerald-700">at high</span>';
+  if (Math.abs(x) < 0.005) return '<span class="text-slate-500">0%</span>';
+  const good = invert ? x > -0.10 : x >= 0;
+  return `<span class="${good ? 'text-emerald-700' : 'text-red-700'}">${fmtPct(x, 0)}</span>`;
+}
+
+function renderLeaderboard(root, data) {
+  const section = root.querySelector('.strategy-leaderboard');
+  if (!section) return;
+  const rows = data.leaderboard || [];
+  if (!rows.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  const meta = data.open_meta || {};
+  section.querySelector('[data-el="board-label"]').textContent =
+    `ranked at the ${fmtDay(meta.entry_date)} rebalance · prices through ${fmtDay(meta.as_of)}`;
+
+  // Sector chips with counts; clicking one filters the table.
+  const counts = new Map();
+  for (const r of rows) {
+    const g = r.group || 'Other';
+    counts.set(g, (counts.get(g) || 0) + 1);
+  }
+  let filter = BOARD_FILTER.get(root) || null;
+  if (filter && !counts.has(filter)) filter = null;
+  const groupsEl = section.querySelector('[data-el="board-groups"]');
+  groupsEl.innerHTML = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([g, n]) => {
+      const on = g === filter;
+      return `<button type="button" data-group="${g}"
+        class="px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+          on ? 'bg-slate-900 text-white border-slate-900'
+             : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+        }">${g} <span class="${on ? 'text-slate-300' : 'text-slate-400'}">${n}</span></button>`;
+    }).join('');
+  groupsEl.querySelectorAll('button[data-group]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const g = btn.dataset.group;
+      BOARD_FILTER.set(root, BOARD_FILTER.get(root) === g ? null : g);
+      renderLeaderboard(root, data);
+    });
+  });
+
+  const maxScore = Math.max(...rows.map(r => r.momentum_score || 0), 1e-9);
+  const visible = filter ? rows.filter(r => (r.group || 'Other') === filter) : rows;
+  const body = section.querySelector('[data-el="board-body"]');
+  body.innerHTML = visible.map((r, i) => {
+    const prev = visible[i - 1];
+    // Inline style: the tbody's divide-y rule would override a border class.
+    const cutoff = prev && prev.held && !r.held ? 'border-top:2px solid #94A3B8' : '';
+    const bg = r.held ? 'bg-emerald-50/60' : '';
+    const width = Math.max(2, Math.round(100 * (r.momentum_score || 0) / maxScore));
+    const held = r.held
+      ? '<span class="ml-1.5 text-[9px] font-bold tracking-wider px-1 py-0.5 rounded bg-emerald-600 text-white">HELD</span>'
+      : '';
+    return `
+      <tr data-ticker="${r.ticker}" class="${bg} cursor-pointer hover:bg-slate-50" style="${cutoff}">
+        <td class="px-3 py-2 text-right text-slate-400 tabular-nums">${r.rank}</td>
+        <td class="px-3 py-2 whitespace-nowrap">
+          <div class="flex items-center">
+            <span class="w-1.5 h-4 rounded-sm mr-2" style="background:${tickerColor(r.ticker)}"></span>
+            <span class="font-bold text-slate-900">${r.ticker}</span>${held}
+          </div>
+          <div class="text-[11px] text-slate-500 ml-3.5">${r.company || ''}</div>
+        </td>
+        <td class="hidden sm:table-cell px-3 py-2 whitespace-nowrap">
+          <div class="text-slate-700">${r.group || '—'}</div>
+          <div class="text-[11px] text-slate-400">${r.niche || ''}</div>
+        </td>
+        <td class="px-3 py-2 min-w-[140px]">
+          <div class="flex items-center gap-2">
+            <div class="flex-1 h-1.5 rounded-full bg-slate-100">
+              <div class="h-1.5 rounded-full bg-indigo-500" style="width:${width}%"></div>
+            </div>
+            <span class="w-14 text-right font-semibold tabular-nums text-slate-800">${fmtPct(r.momentum_score)}</span>
+          </div>
+        </td>
+        <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.since_entry)}</td>
+        <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.ret_1m)}</td>
+        <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.off_6m_high, { invert: true })}</td>
+        <td class="px-3 py-2">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${TAG_STYLE[r.tag] || ''}">${r.tag}</span>
+        </td>
+      </tr>`;
+  }).join('');
+
+  body.querySelectorAll('tr[data-ticker]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const t = tr.dataset.ticker;
+      const chartSection = root.querySelector('.strategy-chart');
+      if (!chartSection || chartSection.classList.contains('hidden')) return;
+      loadChartFor(root, t, meta.entry_date || null);
+      styleChartTabs(root, t);
+      chartSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
 function renderStats(root, data) {
   const s = data.stats || {};
   const strat = s.strategy || {};
-  const qqq = s.qqq || {};
+  const bench = s.benchmark || {};
+  const bm = (data.strategy && data.strategy.benchmark) || 'QQQ';
   const card = (label, value, sub) => `
     <div class="rounded-xl bg-white border border-slate-200 p-4">
       <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">${label}</div>
@@ -368,10 +486,10 @@ function renderStats(root, data) {
   `;
   const grid = root.querySelector('[data-el="stats-grid"]');
   grid.innerHTML = [
-    card('CAGR',          fmtPct(strat.cagr),         `QQQ ${fmtPct(qqq.cagr)}`),
+    card('CAGR',          fmtPct(strat.cagr),         `${bm} ${fmtPct(bench.cagr)}`),
     card('Sharpe',        (strat.sharpe ?? 0).toFixed(2), '(annualized)'),
-    card('Max drawdown',  fmtPct(strat.max_drawdown), `QQQ ${fmtPct(qqq.max_drawdown)}`),
-    card('Win vs QQQ',    fmtPct(strat.win_rate_vs_qqq), 'of rebalances beat QQQ'),
+    card('Max drawdown',  fmtPct(strat.max_drawdown), `${bm} ${fmtPct(bench.max_drawdown)}`),
+    card(`Win vs ${bm}`,  fmtPct(strat.win_rate_vs_benchmark), `of rebalances beat ${bm}`),
   ].join('');
 }
 
@@ -413,7 +531,7 @@ function renderHistory(root, data) {
   const cumStratColor = (w.cum_strategy ?? 0) >= 0 ? 'text-emerald-700' : 'text-red-700';
   root.querySelector('[data-el="window-cum"]').innerHTML =
     `Strategy <span class="font-semibold ${cumStratColor}">${fmtPct(w.cum_strategy, 1)}</span>
-     · QQQ <span class="font-medium text-slate-700">${fmtPct(w.cum_qqq, 1)}</span>`;
+     · ${(data.strategy && data.strategy.benchmark) || 'QQQ'} <span class="font-medium text-slate-700">${fmtPct(w.cum_benchmark, 1)}</span>`;
 }
 
 function renderUpdated(data) {
@@ -452,6 +570,7 @@ async function load({ refresh = false } = {}) {
       renderNext(root, data);
       renderOpen(root, data);
       renderChart(root, data);
+      renderLeaderboard(root, data);
       renderStats(root, data);
       renderHistory(root, data);
     }
@@ -466,6 +585,39 @@ async function load({ refresh = false } = {}) {
     refreshIcon.classList.remove('animate-spin');
   }
 }
+
+// View tabs: "A:top3" | "A:top20" | "B:top3" | "B:top20". Sections declare
+// the views they belong to via data-view; the choice is kept in the URL hash.
+const TAB_ON = 'bg-slate-900 text-white border-slate-900';
+const TAB_OFF = 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100';
+
+function applyView(view) {
+  const [strat, mode] = view.split(':');
+  document.querySelectorAll('.strategy').forEach(root => {
+    root.classList.toggle('view-hidden', root.id !== `strategy-${strat}`);
+    root.querySelectorAll('[data-view]').forEach(el => {
+      el.classList.toggle('view-hidden', !el.dataset.view.split(' ').includes(mode));
+    });
+  });
+  document.querySelectorAll('[data-view-tab]').forEach(btn => {
+    const on = btn.dataset.viewTab === view;
+    btn.className = `flex flex-col items-start rounded-xl border px-4 py-2.5 text-left transition ${on ? TAB_ON : TAB_OFF}`;
+    btn.querySelector('span').className = 'text-sm font-semibold';
+    btn.querySelector('small').className = `text-[11px] ${on ? 'text-slate-300' : 'text-slate-500'}`;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', String(on));
+  });
+  history.replaceState(null, '', `#${strat.toLowerCase()}-${mode}`);
+}
+
+function viewFromHash() {
+  const m = location.hash.match(/^#([ab])-(top3|top20)$/);
+  return m ? `${m[1].toUpperCase()}:${m[2]}` : 'A:top3';
+}
+
+document.querySelectorAll('[data-view-tab]').forEach(btn =>
+  btn.addEventListener('click', () => applyView(btn.dataset.viewTab)));
+applyView(viewFromHash());
 
 document.getElementById('refresh-btn').addEventListener('click', () => load({ refresh: true }));
 load({ refresh: false });

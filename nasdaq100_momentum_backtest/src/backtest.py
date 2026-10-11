@@ -14,6 +14,7 @@ prior weight vectors; the dollar cost is ``turnover * cost_rate``.
 
 from __future__ import annotations
 
+import os
 from dataclasses import asdict
 from typing import Dict, List, Optional, Tuple
 
@@ -21,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from .config import BacktestConfig
-from .download_data import download_price_data
+from .download_data import _cache_path, download_price_data
 from .membership import get_eligible_universe, load_nasdaq100_membership
 from .signals import (
     calculate_momentum_scores,
@@ -86,7 +87,7 @@ def calculate_portfolio_return(
 def _build_membership(config: BacktestConfig) -> pd.DataFrame:
     """Construct (or load) the membership table used to gate eligibility."""
     if config.use_historical_membership:
-        return load_nasdaq100_membership()
+        return load_nasdaq100_membership(config.membership_path)
     # Build an in-memory current-snapshot membership table so the rest of
     # the code path is identical.
     df = pd.DataFrame(
@@ -97,6 +98,33 @@ def _build_membership(config: BacktestConfig) -> pd.DataFrame:
         }
     )
     return df
+
+
+# A former member's last holding period exits within about a month of its
+# removal, so its prices are only needed until shortly after that.
+FORMER_MEMBER_TAIL = pd.Timedelta(days=45)
+
+
+def _former_member_ends(
+    config: BacktestConfig, membership_df: pd.DataFrame
+) -> Dict[str, pd.Timestamp]:
+    """Price-window end for each ticker that has left the index.
+
+    Only point-in-time runs include former members, and only those with a
+    cached price file: Yahoo no longer serves most delisted names
+    (``scripts/build_*`` download the rest once), and requesting them on
+    every run would add the downloader's retry back-off each time.
+    """
+    if not config.use_historical_membership:
+        return {}
+    spans = membership_df.dropna(subset=["ticker"])
+    still_member = set(spans.loc[spans["end_date"].isna(), "ticker"])
+    last_end = spans.dropna(subset=["end_date"]).groupby("ticker")["end_date"].max()
+    return {
+        t: end + FORMER_MEMBER_TAIL
+        for t, end in last_end.items()
+        if t not in still_member and os.path.exists(_cache_path(t))
+    }
 
 
 def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.DataFrame]:
@@ -112,7 +140,9 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
     """
     LOGGER.info("Starting backtest with config: %s", asdict(config))
 
-    universe_tickers = sorted(set(t.upper() for t in config.tickers))
+    membership_df = _build_membership(config)
+    former_ends = _former_member_ends(config, membership_df)
+    universe_tickers = sorted(set(t.upper() for t in config.tickers) | set(former_ends))
     benchmark = config.benchmark.upper()
     secondary = (config.secondary_benchmark or "").upper()
     extras = {benchmark}
@@ -126,14 +156,14 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
         config.end_date,
         force_refresh=config.force_refresh,
         full_refresh=config.full_refresh,
+        end_overrides=former_ends,
     )
     LOGGER.info(
-        "Downloaded %d trading days for %d tickers",
+        "Downloaded %d trading days for %d tickers (%d former members)",
         len(prices),
         prices.shape[1],
+        len(former_ends),
     )
-
-    membership_df = _build_membership(config)
 
     monthly_returns = calculate_monthly_returns(prices)
     first_days = get_first_trading_days(prices)
@@ -288,10 +318,14 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
     # (next month's first trading day) is still in the future.
     open_position = pd.DataFrame()
     next_position = pd.DataFrame()
+    leaderboard = pd.DataFrame()
     if len(rebalance_days) >= 1:
         open_entry = rebalance_days[-1]
         open_exclude = exclude_by_date.get(open_entry) if exclude_by_date else None
         open_position = compute_open_position(
+            prices, monthly_returns, config, open_entry, exclude=open_exclude
+        )
+        leaderboard = compute_leaderboard(
             prices, monthly_returns, config, open_entry, exclude=open_exclude
         )
         if not open_position.empty:
@@ -322,6 +356,7 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
         "monthly_returns": monthly_returns,
         "open_position": open_position,
         "next_position": next_position,
+        "leaderboard": leaderboard,
     }
 
 
@@ -569,3 +604,40 @@ def compute_open_position(
             "is_open": True,
         })
     return pd.DataFrame(rows)
+
+
+def compute_leaderboard(
+    prices: pd.DataFrame,
+    monthly_returns: pd.DataFrame,
+    config: BacktestConfig,
+    entry_date,
+    n: int = 20,
+    exclude=None,
+) -> pd.DataFrame:
+    """Rank the top ``n`` names scored at the rebalance on ``entry_date``.
+
+    The strategy only buys the top ``config.top_n`` (flagged ``held``); the
+    rest of the list is context for manual review. Trend columns use the
+    latest close in ``prices``: ``since_entry`` (return from the entry
+    close), ``ret_1m`` (last 21 trading days) and ``off_6m_high`` (versus the
+    highest close of the last 126 trading days).
+    """
+    entry_date = to_business_date(entry_date)
+    _, scores = _score_at(prices, monthly_returns, config, entry_date, exclude=exclude)
+    if scores.empty:
+        return pd.DataFrame()
+    top = scores.head(n)
+    recent = prices[top.index].ffill()
+    latest = recent.iloc[-1]
+    entry = recent.loc[:entry_date].iloc[-1]
+    return pd.DataFrame({
+        "rank": range(1, len(top) + 1),
+        "ticker": top.index,
+        "momentum_score": top.values,
+        "held": [i < config.top_n for i in range(len(top))],
+        "entry_price": entry.values,
+        "latest_price": latest.values,
+        "since_entry": (latest / entry - 1.0).values,
+        "ret_1m": (latest / recent.iloc[-22] - 1.0).values,
+        "off_6m_high": (latest / recent.iloc[-126:].max() - 1.0).values,
+    })

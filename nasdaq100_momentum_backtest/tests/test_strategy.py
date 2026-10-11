@@ -19,6 +19,7 @@ from src.backtest import (  # noqa: E402
     _predict_next_first_trading_day,
     _signal_locked_for_next_entry,
     calculate_portfolio_return,
+    compute_leaderboard,
     compute_next_position,
 )
 from src import download_data  # noqa: E402
@@ -308,6 +309,108 @@ class TestComputeNextPosition(unittest.TestCase):
         )
 
 
+class TestLeaderboard(unittest.TestCase):
+    def setUp(self):
+        tickers = ["AAA", "BBB", "CCC", "DDD", "EEE", "QQQ"]
+        self.prices = _make_daily_prices("2025-01-01", "2026-10-09", tickers, seed=7)
+        self.monthly = calculate_monthly_returns(self.prices)
+        self.config = BacktestConfig(
+            tickers=tickers[:-1], benchmark="QQQ", secondary_benchmark="", top_n=2,
+        )
+        self.entry = pd.Timestamp("2026-10-01")
+
+    def test_ranking_matches_scores_and_flags_held(self):
+        board = compute_leaderboard(self.prices, self.monthly, self.config, self.entry, n=4)
+        scores = calculate_momentum_scores(self.monthly[self.config.tickers], self.entry)
+        self.assertEqual(list(board["ticker"]), list(scores.index[:4]))
+        self.assertEqual(list(board["held"]), [True, True, False, False])
+        self.assertNotIn("QQQ", set(board["ticker"]))
+
+    def test_trend_columns(self):
+        board = compute_leaderboard(self.prices, self.monthly, self.config, self.entry)
+        row = board.iloc[0]
+        series = self.prices[row["ticker"]]
+        self.assertAlmostEqual(row["since_entry"], series.iloc[-1] / series.loc[self.entry] - 1)
+        self.assertAlmostEqual(row["ret_1m"], series.iloc[-1] / series.iloc[-22] - 1)
+        self.assertLessEqual(row["off_6m_high"], 0.0)
+
+    def test_exclude_drops_tickers(self):
+        first = compute_leaderboard(self.prices, self.monthly, self.config, self.entry)["ticker"].iloc[0]
+        board = compute_leaderboard(self.prices, self.monthly, self.config, self.entry, exclude={first})
+        self.assertNotIn(first, set(board["ticker"]))
+
+    def test_trend_tag_rule(self):
+        from webapp.server import _trend_tag
+        self.assertEqual(_trend_tag(-0.05, 0.02), "Buy")
+        self.assertEqual(_trend_tag(-0.05, -0.02), "Hold")
+        self.assertEqual(_trend_tag(-0.15, 0.10), "Hold")
+        self.assertEqual(_trend_tag(-0.25, -0.05), "Watch")
+        self.assertEqual(_trend_tag(-0.25, -0.12), "Caution")
+        self.assertEqual(_trend_tag(-0.40, 0.20), "Caution")
+
+
+class TestSp500Membership(unittest.TestCase):
+    """Point-in-time spans rebuilt from today's list plus the change log."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        from build_sp500 import build_membership
+        self.build = build_membership
+        self.constituents = pd.DataFrame({
+            "Symbol": ["AAA", "NEW", "BACK"],
+            "Date added": ["1990-01-01", "2024-03-18", "2010-01-01"],
+        })
+        # Newest first, as on Wikipedia.
+        self.changes = pd.DataFrame({
+            "date": pd.to_datetime(["2024-03-18", "2022-06-01", "2019-01-02", "2012-05-01"]),
+            "added": ["NEW", "BACK", None, None],
+            "removed": ["OLD", None, "BACK", "GONE"],
+        })
+
+    def spans(self, ticker):
+        m = self.build(self.constituents, self.changes)
+        return [(str(r.start_date.date()), None if pd.isna(r.end_date) else str(r.end_date.date()))
+                for r in m[m.ticker == ticker].itertuples()]
+
+    def test_current_member_added_by_change(self):
+        self.assertEqual(self.spans("NEW"), [("2024-03-18", None)])
+
+    def test_current_member_from_date_added(self):
+        self.assertEqual(self.spans("AAA"), [("1990-01-01", None)])
+
+    def test_removed_member_ends_day_before_removal(self):
+        self.assertEqual(self.spans("OLD"), [("2000-01-01", "2024-03-17")])
+
+    def test_removed_and_readded_member_has_two_spans(self):
+        self.assertEqual(self.spans("BACK"), [("2000-01-01", "2019-01-01"), ("2022-06-01", None)])
+
+    def test_spans_ending_before_since_are_dropped(self):
+        self.assertEqual(self.spans("GONE"), [])
+
+    def test_former_members_join_universe_with_capped_window(self):
+        from src.backtest import FORMER_MEMBER_TAIL, _former_member_ends
+        membership = pd.DataFrame({
+            "ticker": ["CUR", "OLD", "BACK", "BACK", "NODATA"],
+            "start_date": pd.to_datetime(["2010-01-01", "2010-01-01", "2010-01-01", "2022-01-01", "2010-01-01"]),
+            "end_date": pd.to_datetime([None, "2020-06-30", "2019-01-01", None, "2021-01-01"]),
+        })
+        has_file = lambda t: t != "NODATA"  # noqa: E731
+        with mock.patch("src.backtest._cache_path", side_effect=lambda t: t), \
+                mock.patch("src.backtest.os.path.exists", side_effect=has_file):
+            pit = _former_member_ends(BacktestConfig(use_historical_membership=True), membership)
+            snap = _former_member_ends(BacktestConfig(use_historical_membership=False), membership)
+        self.assertEqual(pit, {"OLD": pd.Timestamp("2020-06-30") + FORMER_MEMBER_TAIL})
+        self.assertEqual(snap, {})
+
+    def test_membership_path_is_used(self):
+        path = os.path.join(tempfile.mkdtemp(), "m.csv")
+        self.addCleanup(shutil.rmtree, os.path.dirname(path))
+        pd.DataFrame({"ticker": ["ZZZ"], "start_date": ["2020-01-01"], "end_date": [""]}).to_csv(path, index=False)
+        from src.backtest import _build_membership
+        cfg = BacktestConfig(use_historical_membership=True, membership_path=path)
+        self.assertEqual(list(_build_membership(cfg)["ticker"]), ["ZZZ"])
+
+
 class TestIncrementalCacheAdjustment(unittest.TestCase):
     """A split between cache refreshes must not splice two price bases."""
 
@@ -317,6 +420,8 @@ class TestIncrementalCacheAdjustment(unittest.TestCase):
         patcher = mock.patch.object(download_data, "RAW_PRICES_DIR", self.tmp)
         patcher.start()
         self.addCleanup(patcher.stop)
+        download_data._FAILED_REFRESH.clear()
+        self.addCleanup(download_data._FAILED_REFRESH.clear)
         dates = pd.bdate_range("2026-05-01", "2026-07-31")
         # Closes around 700 until a 4:1 split on 2026-06-26; afterwards the
         # provider serves the whole history split-adjusted (divided by 4).
@@ -357,6 +462,16 @@ class TestIncrementalCacheAdjustment(unittest.TestCase):
             )
         cached = download_data._load_cached("XYZ")
         self.assertEqual(cached.index.min(), pd.Timestamp("2026-05-01"))
+
+    def test_failed_refresh_is_not_retried_immediately(self):
+        with mock.patch.object(download_data, "_download_one", return_value=None) as dl:
+            for _ in range(3):
+                close = download_data._fetch_ticker_close(
+                    "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
+                    force_refresh=False, full_refresh=False,
+                )
+        self.assertEqual(dl.call_count, 1)
+        self.assertEqual(close.index.max(), pd.Timestamp("2026-06-24"))
 
     def test_unchanged_basis_merges_tail_only(self):
         self.provider = pd.Series(700.0 + np.arange(len(self.provider)), index=self.provider.index)

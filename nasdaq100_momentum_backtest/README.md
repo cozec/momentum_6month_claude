@@ -136,7 +136,7 @@ This walks the hard-coded reconstitution table in [`scripts/build_membership.py`
 
 **Manual.** Edit the CSV directly. Columns: `ticker, start_date, end_date` (empty `end_date` = still a constituent).
 
-**Survivorship-bias impact (measured):** running the same backtest with PIT membership vs the default current-snapshot universe drops the headline CAGR by ~25–30 pp (e.g. 83% → 58%) while leaving Sharpe nearly unchanged. The excess return shrinks; the strategy quality doesn't. See [`summary.md`](summary.md) for the headline numbers.
+**Survivorship-bias impact (measured):** running the same backtest with PIT membership vs the default current-snapshot universe drops the headline CAGR by ~32 pp (83% → 51%) and Sharpe from 1.43 to 1.25. Former members are included where Yahoo still has prices; 29 delisted names are not, so a small bias remains. See [`summary.md`](summary.md) for the headline numbers.
 
 The auto-built table excludes ~16 tickers whose ends Wikipedia doesn't capture as discrete "removed" events (renames like FB→META, PCLN→BKNG, KFT split, WFMI acquired by AMZN, etc.). Those leave a small residual bias; add the missing rows by hand if you need them.
 
@@ -166,20 +166,22 @@ Writes `outputs/grid_search/grid_results.csv` and four heatmaps + an IS-vs-OOS s
 
 ## Live dashboard
 
-A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page that shows **two strategies side-by-side**:
+A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page with **four tabs** — each strategy's held top 3 and its full top-20 ranking:
 
-- **Strategy A** — `L=6m / P=1m` (the project default / baseline).
-- **Strategy B** — `L=3m / P=2m` (the grid-search winner, kept on the page as an apples-to-apples comparison).
+- **Strategy A** — Nasdaq-100, `L=6m / P=1m` (the project default / baseline), benchmarked vs QQQ.
+- **Strategy B** — S&P 500 with point-in-time membership, same rules, skipping whatever Strategy A holds that month; benchmarked vs SPY. Run `python scripts/build_sp500.py` to rebuild its universe (`data/sp500_constituents.csv`, `data/sp500_membership.csv`) from Wikipedia's constituents list and change log.
 
-Each section shows:
+The **Top 3** tabs show:
 
 - **Current open holdings** — with MTD return and an "in progress" badge.
 - **Next month's planned picks** — entry-price estimate, momentum rank, and an MOC-order note so live trades line up with the backtest's first-trading-day fill assumption.
-- **Summary stats** — CAGR, Sharpe, max drawdown, win-rate vs QQQ.
+- **Summary stats** — CAGR, Sharpe, max drawdown, win-rate vs the strategy's benchmark.
 - **6-month daily candle chart** — an interactive candlestick panel (TradingView lightweight-charts) for the selected holding, with an entry marker and a ticker switcher across the current picks.
 - **Last 12 completed rebalances** — vertical feed with entry/exit prices and per-stock return.
 
-The webapp uses [point-in-time membership](#membership) (`use_historical_membership=True`) by default, so the numbers on the page are the survivorship-free ones (~25 pp lower CAGR than the snapshot universe — see [`summary.md`](summary.md)). Both strategies are fetched in a single `/api/picks-multi` round-trip, and an in-process 5-minute cache (`CACHE_TTL_SECONDS` in [`webapp/server.py`](webapp/server.py)) keeps page refreshes near-instant. The candle chart panel pulls daily OHLCV bars per ticker from a separate `/api/ohlc?ticker=&months=` endpoint, which reuses the `data/raw_prices/*.csv` cache and fetches/merges any missing recent slice. The header **Refresh** button forces yfinance to re-download fresh prices and bypasses the cache.
+The **Top 20** tabs show the ranking at the current rebalance — momentum score, return since entry, 1-month return, distance from the 6-month high, sector (sector chips filter the table) and a trend tag — with the top 3 marked HELD; clicking a row charts it.
+
+The webapp uses [point-in-time membership](#membership) (`use_historical_membership=True`) for both strategies (former members Yahoo no longer prices are still missing, so some survivorship bias remains — see [`summary.md`](summary.md)). Both strategies are fetched in a single `/api/dashboard` round-trip, and an in-process 5-minute cache (`CACHE_TTL_SECONDS` in [`webapp/server.py`](webapp/server.py)) keeps page refreshes near-instant. The candle chart panel pulls daily OHLCV bars per ticker from a separate `/api/ohlc?ticker=&months=` endpoint, which reuses the `data/raw_prices/*.csv` cache and fetches/merges any missing recent slice. The header **Refresh** button forces yfinance to re-download fresh prices and bypasses the cache.
 
 Run locally:
 
@@ -191,7 +193,7 @@ python run_webapp.py        # → http://127.0.0.1:8765
 
 If `python` isn't on your PATH (macOS default), use `python3 run_webapp.py` or the venv interpreter directly (`.venv/bin/python run_webapp.py`). Override host/port with `MOMENTUM_HOST` / `MOMENTUM_PORT`; set `MOMENTUM_RELOAD=1` for uvicorn auto-reload during development.
 
-On the first trading day of a new month, Strategy A's open position rolls to a new entry; Strategy B holds for two months so it only rolls every second first-trading-day.
+On the first trading day of a new month, both strategies' open positions roll to a new entry.
 
 ## One-click deploy (Render + GitHub Actions + Resend)
 

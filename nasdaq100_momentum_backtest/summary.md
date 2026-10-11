@@ -5,7 +5,7 @@
 | Parameter | Value |
 |-----------|-------|
 | Strategy | Top-3 equal-weight, 6-month average monthly return |
-| Universe | Nasdaq-100 with **point-in-time membership** (from `scripts/build_membership.py` → 300 spans, 101 currently active). Survivorship bias controlled. |
+| Universe | Nasdaq-100 with **point-in-time membership** (from `scripts/build_membership.py` → 300 spans, 101 currently active), including former members: 157 of the 186 tickers that were members since 2016 have Yahoo prices; 29 delisted names (CELG, XLNX, ATVI, …) do not, so some survivorship bias remains. |
 | Data window | 2016-01-01 → 2026-05-12 |
 | Realized backtest window | 2016-08-01 entry → 2026-05-01 exit |
 | Lookback | 6 completed months |
@@ -17,25 +17,25 @@
 | Primary benchmark | QQQ (buy & hold) |
 | Secondary benchmark | TQQQ (buy & hold, 3× leveraged QQQ) |
 | Rebalances executed | 117 |
-| Tickers with usable history | 101 currently active + historical adds/drops via PIT membership |
+| Tickers with usable history | 101 current members + 56 former members with price data |
 
 ## Headline results (point-in-time membership)
 
 | Metric | Strategy | QQQ B&H | TQQQ B&H |
 |--------|---------:|--------:|---------:|
-| CAGR | **57.70%** | 20.64% | 40.45% |
-| Annualized volatility | 39.20% | 20.11% | 62.87% |
-| Sharpe ratio | **1.36** | 1.04 | 0.86 |
-| Max drawdown | -30.56% | -33.67% | **-80.13%** |
-| Total return | +8,390% | +523% | +2,644% |
-| Final value (from $100k) | $8,489,656 | $622,983 | $2,743,567 |
-| Average monthly return | 4.44% | 1.74% | 4.52% |
-| Median monthly return | 2.42% | 2.08% | 5.10% |
+| CAGR | **51.02%** | 20.64% | 40.45% |
+| Annualized volatility | 39.21% | 20.11% | 62.87% |
+| Sharpe ratio | **1.25** | 1.04 | 0.86 |
+| Max drawdown | -32.43% | -33.67% | **-80.13%** |
+| Total return | +5,465% | +523% | +2,644% |
+| Final value (from $100k) | $5,564,986 | $622,983 | $2,743,567 |
+| Average monthly return | 4.08% | 1.74% | 4.52% |
+| Median monthly return | 1.90% | 2.08% | 5.10% |
 | Best month | +54.71% | +16.69% | +52.19% |
-| Worst month | -18.15% | -15.58% | -52.31% |
-| Win rate vs QQQ (months) | 58.1% | — | — |
-| Win rate vs TQQQ (months) | 46.2% | — | — |
-| Average turnover | 77.21%/mo | — | — |
+| Worst month | -21.38% | -15.58% | -52.31% |
+| Win rate vs QQQ (months) | 62.4% | — | — |
+| Win rate vs TQQQ (months) | 47.0% | — | — |
+| Average turnover | 82.91%/mo | — | — |
 
 ## Snapshot vs PIT membership — by strategy
 
@@ -43,10 +43,12 @@ The webapp at [`webapp/`](webapp/) renders both Strategy A and Strategy B; each 
 
 | | Snapshot (was) | **PIT (now)** | Δ |
 |---|---:|---:|---:|
-| Strategy A CAGR | 83.42% | **57.70%** | −25.7 pp |
-| Strategy A Sharpe | 1.43 | **1.36** | −0.07 |
+| Strategy A CAGR | 83.42% | **51.02%** | −32.4 pp |
+| Strategy A Sharpe | 1.43 | **1.25** | −0.18 |
 | Strategy B CAGR | 97.84% | **46.86%** | **−51.0 pp** |
 | Strategy B Sharpe | 1.58 | **1.24** | −0.34 |
+
+Strategy A's PIT column includes former members (fixed 2026-10-11, see below). The Strategy B rows are the retired L=3m/P=2m variant, measured before that fix.
 
 **Why Strategy B's correction is much larger:** its top-3 leaned more heavily on late-2024+ additions (MSTR, PLTR, APP, SNDK) than the L=6m baseline did. The bi-monthly variant was *more* survivorship-inflated, which is consistent with the grid-search caveat: a 0.15-Sharpe edge over 60 observations is well within noise, and most of it was bias to begin with.
 
@@ -54,10 +56,10 @@ The webapp at [`webapp/`](webapp/) renders both Strategy A and Strategy B; each 
 
 ## Interpretation
 
-- **Strategy vs QQQ.** Still meaningfully better on absolute return (+8,390% vs +523%) and on Sharpe (1.36 vs 1.04), at the cost of ~2× the volatility (39% vs 20%). Strikingly, with PIT membership the max drawdown is now *shallower* than QQQ's (-30.6% vs -33.7%) — the strategy rotates out of the worst names before they bottom. Beats QQQ in 58% of months.
-- **Strategy vs TQQQ.** TQQQ buy-and-hold (3× daily QQQ) compounded to +2,644% — about 5× the QQQ return, well short of a naive 3× because of daily-rebalanced volatility drag and the brutal 2022 drawdown. The strategy beats TQQQ in absolute terms (≈$8.5M vs ≈$2.7M) and on Sharpe (1.36 vs 0.86), with much lower volatility (39% vs 63%) and a far shallower max drawdown (-30.6% vs **-80.1%**). It loses on monthly win rate (46% — TQQQ's monthly returns are amplified). The right comparison isn't *which beats more months* but *which is worth holding*: TQQQ-style leverage spends its CAGR on volatility, while the strategy turns it into Sharpe.
+- **Strategy vs QQQ.** Still meaningfully better on absolute return (+5,465% vs +523%) and on Sharpe (1.25 vs 1.04), at the cost of ~2× the volatility (39% vs 20%). With PIT membership the max drawdown (measured on monthly marks) is slightly *shallower* than QQQ's (-32.4% vs -33.7%). Beats QQQ in 62% of months.
+- **Strategy vs TQQQ.** TQQQ buy-and-hold (3× daily QQQ) compounded to +2,644% — about 5× the QQQ return, well short of a naive 3× because of daily-rebalanced volatility drag and the brutal 2022 drawdown. The strategy beats TQQQ in absolute terms (≈$5.6M vs ≈$2.7M) and on Sharpe (1.25 vs 0.86), with much lower volatility (39% vs 63%) and a far shallower max drawdown (-32.4% vs **-80.1%**). It loses on monthly win rate (47% — TQQQ's monthly returns are amplified). The right comparison isn't *which beats more months* but *which is worth holding*: TQQQ-style leverage spends its CAGR on volatility, while the strategy turns it into Sharpe.
 - **TQQQ is the asymmetric loser on drawdown.** -80% peak-to-trough means a $1M TQQQ position drops to $200k; recovering requires a +400% rally on what remains. This is the hidden cost behind TQQQ's superficially attractive +2,644% headline.
-- **No-friction caveat.** This run sets transaction cost = slippage = 0, so strategy returns are *gross* (pre-trading-cost). At ~77% average monthly turnover, a 10 bps round-trip would shave roughly 0.92% per year off the strategy's CAGR; a 20 bps round-trip would shave ~1.8%. QQQ and TQQQ buy-and-hold are essentially frictionless anyway.
+- **No-friction caveat.** This run sets transaction cost = slippage = 0, so strategy returns are *gross* (pre-trading-cost). At ~83% average monthly turnover, a 10 bps round-trip would shave roughly 1.0% per year off the strategy's CAGR; a 20 bps round-trip would shave ~2.0%. QQQ and TQQQ buy-and-hold are essentially frictionless anyway.
 
 ## Current holdings and last 12 rebalances
 
@@ -174,27 +176,27 @@ A proper apples-to-apples result requires a historical Nasdaq-100 membership fil
 
 | Ticker | Selections |
 |--------|-----------:|
-| NVDA | 43 |
-| TSLA | 31 |
-| MU | 23 |
-| AMD | 22 |
-| MELI | 18 |
-| PDD | 17 |
-| STX | 11 |
-| NFLX | 11 |
-| PLTR | 10 |
+| NVDA | 39 |
+| TSLA | 26 |
+| MRNA | 17 |
+| AMD | 16 |
+| MU | 15 |
+| MELI | 14 |
 | CEG | 10 |
-| VRTX | 9 |
+| PLTR | 10 |
+| PDD | 10 |
+| STX | 10 |
+| NFLX | 9 |
+| ALGN | 9 |
+| ZM | 8 |
+| VRTX | 8 |
 | APP | 8 |
-| META | 8 |
-| AMAT | 8 |
-| CRWD | 7 |
 
 PIT-vs-snapshot diff: under PIT, names always-in-the-index (NVDA, TSLA, MU, AMD, MELI) get many more selections because they're the only eligible momentum candidates for most of the early window. Late additions (MSTR, SHOP, SNDK, WDC, INSM, ALNY, AXON) drop sharply since they aren't eligible until their actual join date.
 
 ## Output files
 
-- `outputs/monthly_selections.csv` — 351 rows (117 rebalances × 3 picks). 33 distinct tickers picked from the 101-name universe.
+- `outputs/monthly_selections.csv` — 351 rows (117 rebalances × 3 picks). 68 distinct tickers picked from the point-in-time universe.
 - `outputs/portfolio_returns.csv` — 117 rows. Includes `tqqq_return`, `tqqq_value`, and `excess_return_vs_tqqq` columns.
 - `outputs/summary_stats.csv` — three columns: strategy, QQQ buy-and-hold, TQQQ buy-and-hold.
 - `outputs/charts/` — equity curve (log-scale, all three lines), drawdown (strategy + QQQ + TQQQ overlay), monthly distribution, rolling 6m and 12m returns (with TQQQ), ticker-selection frequency, monthly excess vs QQQ.
@@ -231,6 +233,40 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
   - Switched the per-ticker fetch from `yf.download` to the thread-safe `Ticker.history` API (`yf.download` writes module-global state and corrupts frames under concurrency), stripping its tz so it still merges with the naive-dated CSV cache.
   - **Result:** a full forced refresh of 103 tickers now completes in **~2.4 s** end-to-end (first strategy ~2.3 s of parallel download, second strategy ~0.07 s from the panel cache); a normal cached reload is ~1.5 ms. All 23 unit tests still pass.
 
+## Strategy B review — S&P 500 basket (2026-10-11)
+
+Strategy B runs Strategy A's rules (top 3 by 6-month momentum, equal weight, monthly) over the S&P 500, skipping the stocks Strategy A holds that month. Until this review it used **today's** S&P 500 list for the whole history: 209 of its 366 picks (57%) were made before the stock had even joined the index (CVNA 33 times, SMCI 15, MRNA 14, HOOD 9). It now uses point-in-time membership rebuilt from Wikipedia's constituents list plus its change log (`scripts/build_sp500.py` → `data/sp500_membership.csv`: 733 spans, 723 tickers since 2016, 615 with Yahoo prices) and is benchmarked against SPY instead of QQQ.
+
+Aug 2016 → Oct 1 2026, 122 monthly rebalances, gross of costs, ordered by final equity. All rows use the corrected Strategy A universe (next section) — B's exclusions depend on A's picks.
+
+| Strategy | Final equity ($10k) | CAGR | Vol | Sharpe | Max DD | Beta (SPY) | Alpha (SPY) |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| B — old: today's S&P list (look-ahead)† | $1,258,844 | 60.9% | 53.1% | 1.12 | −38.8% | 1.78 | +35.5% |
+| A — Nasdaq-100, PIT incl. former members | $739,624 | 52.7% | 40.8% | 1.20 | −32.4% | 1.39 | +30.3% |
+| 50/50 A + B (PIT) | $214,842 | 35.2% | 35.1% | 0.97 | −29.4% | 1.29 | +17.0% |
+| QQQ buy & hold | $68,718 | 20.9% | 20.0% | 0.95 | −33.7% | 1.15 | +3.8% |
+| **B — point-in-time (now on the dashboard)** | **$42,134** | **15.2%** | **40.2%** | **0.49** | **−44.5%** | **1.19** | **+3.7%** |
+| SPY buy & hold | $41,446 | 15.0% | 16.0% | 0.84 | −23.8% | 1.00 | 0 |
+
+Sharpe and alpha use a flat 2% risk-free rate (the dashboard's Sharpe uses none); alpha/beta are vs SPY monthly returns. † measured against the old A universe. A cruder fix — gating today's members by their S&P "date added" without adding former members — gave 22.9% CAGR.
+
+- **The old headline was look-ahead.** With point-in-time membership B matches SPY's return (15.2% vs 15.0%) with 2.5× its volatility, a −44.5% drawdown and a Sharpe of 0.49. Former members matter: names that later left the index (ENPH, ETSY, NKTR, SEDG, …) were momentum picks that subsequently collapsed.
+- **B is fragile.** Its result moved from 9.7% to 15.2% CAGR just from A's universe fix changing which three names B skips each month.
+- **B does not diversify A.** Monthly correlation 0.50; 29 of B's 36 holdings over the last 12 months were Information Technology. A 50/50 A+B mix has a *lower* Sharpe (0.97) than A alone (1.20).
+- **Residual bias:** 108 former S&P members (CELG, XLNX, ATVI, TWTR, …) have no Yahoo data, so the true PIT result is likely somewhat worse.
+- **Also changed:** dashboard copy (B is not "ex Nasdaq-100" — about a fifth of its picks are Nasdaq-100 members; the Nasdaq-100 is not inside the S&P 500), stats labelled with each strategy's own benchmark, the stale S&P list refreshed, and failed refreshes of delisted tickers are no longer retried on every request.
+
+## Strategy A universe fix — former Nasdaq-100 members (2026-10-11)
+
+Strategy A's "point-in-time" run only ever downloaded today's 101 members, so former members were never eligible (in 2017 just 53 of 106 members were tradable). `run_backtest` now adds every former member that has a price file under point-in-time membership, pricing each only until 45 days after it left the index (so delisted names aren't re-requested on every run); `scripts/build_membership.py` downloads them. 157 of the 186 members since 2016 now have prices (was 133); 21 newly eligible names were picked 70 times (MRNA 17, ALGN 9, ZM 8, …) with mixed results.
+
+| Strategy A, PIT | CAGR | Sharpe | Max DD | Final ($100k) |
+|---|--:|--:|--:|--:|
+| Before (current members only), to 2026-05-12 | 57.70% | 1.36 | −30.56% | $8,489,656 |
+| **After (former members included), to 2026-05-12** | **51.02%** | **1.25** | **−32.43%** | **$5,564,986** |
+
+Current holdings, the top-20 ranking and the last 12 rebalances are unchanged; the headline tables above are updated. Tests: **39/39 pass**.
+
 ## Price-cache split fix (2026-10-11)
 
 The incremental cache refresh appended fresh bars onto cached history without checking that both were on the same adjustment basis, so a split between refreshes left a fake one-day crash in the cache: CRWD (4:1, 2026-06-26, showed −74%), KLAC (10:1, 2026-06-03, −90%), APH (2:1, 2026-08-07) and CTVA (2026-10-01). 347 other files had small dividend re-adjustment drift.
@@ -241,7 +277,7 @@ The incremental cache refresh appended fresh bars onto cached history without ch
 
 ## Caveats
 
-1. **Survivorship bias** — current-constituents universe overstates strategy returns. The grid-search experiment first estimated this at ~31 pp (dropping post-2018 index additions cut CAGR from ~78% to ~47%). With a Wikipedia-sourced PIT membership CSV (`python scripts/build_membership.py` then `--use-historical-membership`), the measured delta is ~25 pp: **CAGR 83.4% → 57.7%, Sharpe 1.43 → 1.36, max DD -36.5% → -30.6%** over the same 117-rebalance window. Sharpe and DD barely move — the strategy *quality* is intact; the excess return is what shrinks. QQQ and TQQQ buy-and-hold figures are unaffected.
+1. **Survivorship bias** — current-constituents universe overstates strategy returns. The grid-search experiment first estimated this at ~31 pp (dropping post-2018 index additions cut CAGR from ~78% to ~47%). With a Wikipedia-sourced PIT membership CSV (`python scripts/build_membership.py` then `--use-historical-membership`), the measured delta is ~32 pp: **CAGR 83.4% → 51.0%, Sharpe 1.43 → 1.25, max DD -36.5% → -32.4%** over the same 117-rebalance window (former members included; 29 delisted names without Yahoo data are still missing). Sharpe and DD barely move — the strategy *quality* is intact; the excess return is what shrinks. QQQ and TQQQ buy-and-hold figures are unaffected.
 2. **Leverage decay** — TQQQ resets exposure daily, so over multi-month windows the return is path-dependent and typically less than 3× the QQQ return. The realized -80% drawdown is the worst-case manifestation of that path dependence.
 3. **Concentration risk** — top-3 equal-weight is highly concentrated; the realized volatility reflects that.
 4. **Execution** — fills assumed at the first-day adjusted close with 0 bps friction. Real capacity, market impact, and tax effects are not modelled; at ~72%/mo turnover, a 10 bps round-trip would shave ~0.86 pp/yr off the CAGR.

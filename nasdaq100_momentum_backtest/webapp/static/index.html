@@ -30,6 +30,7 @@
       background-size: 200% 100%;
       animation: shimmer 1.4s linear infinite;
     }
+    .view-hidden { display: none !important; }
     @keyframes shimmer { from {background-position:200% 0} to {background-position:-200% 0} }
   </style>
 </head>
@@ -62,14 +63,22 @@
     <!-- error banner -->
     <div id="error" class="hidden mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800"></div>
 
+    <!-- view tabs: each strategy's held top 3, or its full top-20 ranking -->
+    <nav id="view-tabs" role="tablist" class="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <button type="button" data-view-tab="A:top3"><span>Strategy A · Top 3</span><small>Nasdaq-100 holdings</small></button>
+      <button type="button" data-view-tab="A:top20"><span>Strategy A · Top 20</span><small>Nasdaq-100 ranking</small></button>
+      <button type="button" data-view-tab="B:top3"><span>Strategy B · Top 3</span><small>S&amp;P 500 holdings</small></button>
+      <button type="button" data-view-tab="B:top20"><span>Strategy B · Top 20</span><small>S&amp;P 500 ranking</small></button>
+    </nav>
+
     <!-- strategy A: Nasdaq-100 baseline L=6m/P=1m -->
     <div id="strategy-A" data-strategy-id="nasdaq100" data-lookback="6" data-period="1" class="strategy mb-12">
-      <div class="mb-5">
+      <div class="mb-5" data-view="top3 top20">
         <h2 class="text-xl font-bold text-slate-900">Strategy A · Nasdaq-100 · 6-month momentum, monthly rebalance</h2>
         <p class="text-xs text-slate-500 mt-0.5">L=6m / P=1m  ·  baseline / project default</p>
       </div>
 
-      <div class="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div class="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4" data-view="top3">
         <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">How this strategy works</h3>
         <p class="text-sm text-slate-600 leading-relaxed">
           On the first trading day of each month, rank every point-in-time Nasdaq-100 member by
@@ -82,14 +91,14 @@
         </p>
       </div>
 
-      <section class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
+      <section data-view="top3" class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
       </section>
 
-      <section class="strategy-next mb-4 hidden">
+      <section class="strategy-next mb-4 hidden" data-view="top3">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
           <h3 class="text-xs font-semibold uppercase tracking-wider text-indigo-700">
@@ -100,7 +109,7 @@
         <p data-el="next-note" class="mt-2 text-xs text-slate-500"></p>
       </section>
 
-      <section class="mb-6 strategy-open">
+      <section class="mb-6 strategy-open" data-view="top3">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -115,7 +124,39 @@
         <p data-el="open-portfolio-mtd" class="mt-2 text-sm text-slate-500"></p>
       </section>
 
-      <section class="mb-6 strategy-chart hidden">
+      <section class="mb-6 strategy-leaderboard hidden" data-view="top20">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Momentum Top 20 <span data-el="board-label" class="ml-2 text-slate-400 font-normal normal-case tracking-normal"></span>
+          </h3>
+          <div data-el="board-groups" class="flex flex-wrap items-center gap-1"></div>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th class="px-3 py-2 text-right font-semibold">#</th>
+                <th class="px-3 py-2 text-left font-semibold">Ticker</th>
+                <th class="hidden sm:table-cell px-3 py-2 text-left font-semibold">Sector</th>
+                <th class="px-3 py-2 text-left font-semibold" title="6-month average monthly return at the rebalance — the ranking variable">Mom / mo</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Return from the rebalance-day close to the latest close">Since entry</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Return over the last 21 trading days">1M</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Latest close vs the highest close of the last 126 trading days">Off 6M high</th>
+                <th class="px-3 py-2 text-left font-semibold">Trend</th>
+              </tr>
+            </thead>
+            <tbody data-el="board-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <p class="mt-2 text-[11px] text-slate-400 leading-relaxed">
+          The strategy buys only the top 3 (<span class="font-semibold text-emerald-700">HELD</span>); the rest is
+          context for manual review. Trend tag — Buy: within 10% of the 6-month high and up over the last month ·
+          Hold: within 20% · Watch: 20–30% off and last month better than −10% · Caution: otherwise.
+          Not part of the strategy. Click a row to chart it; click a sector to filter.
+        </p>
+      </section>
+
+      <section class="mb-6 strategy-chart hidden" data-view="top3 top20">
         <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
             6-Month Daily Candles
@@ -128,7 +169,7 @@
         </div>
       </section>
 
-      <section class="strategy-history">
+      <section class="strategy-history" data-view="top3">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Past <span data-el="history-count">12</span> Rebalances
@@ -141,34 +182,35 @@
 
     <!-- strategy B: S&P 500, deduped against the Nasdaq-100 basket -->
     <div id="strategy-B" data-strategy-id="sp500" data-lookback="6" data-period="1" class="strategy">
-      <div class="mb-5">
-        <h2 class="text-xl font-bold text-slate-900">Strategy B · S&amp;P 500 (ex Nasdaq-100 picks) · 6-month momentum, monthly rebalance</h2>
-        <p class="text-xs text-slate-500 mt-0.5">L=6m / P=1m  ·  same rules, broader universe, complementary basket</p>
+      <div class="mb-5" data-view="top3 top20">
+        <h2 class="text-xl font-bold text-slate-900">Strategy B · S&amp;P 500 (excluding Strategy A&#8217;s holdings) · 6-month momentum, monthly rebalance</h2>
+        <p class="text-xs text-slate-500 mt-0.5">L=6m / P=1m  ·  same rules, point-in-time S&amp;P 500 universe, benchmarked vs SPY</p>
       </div>
 
-      <div class="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div class="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4" data-view="top3">
         <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">How this strategy works</h3>
         <p class="text-sm text-slate-600 leading-relaxed">
           The exact same rules as Strategy A — rank by
           <span class="font-medium text-slate-800">6-month momentum</span>, buy the
           <span class="font-medium text-slate-800">top 3</span> equal-weighted, hold one month, rotate —
-          but over the <span class="font-medium text-slate-800">S&amp;P 500</span> universe. Because the
-          Nasdaq-100 sits inside the S&amp;P 500, each month this basket
-          <span class="font-medium text-slate-800">excludes the tickers Strategy A already holds</span>, so
-          the two baskets never overlap and together give a diversified 6-stock view. Same
-          <span class="font-medium text-slate-800">QQQ</span> / 3× <span class="font-medium text-slate-800">TQQQ</span>
-          benchmarks. (S&amp;P universe uses the current constituent snapshot.)
+          but over the <span class="font-medium text-slate-800">S&amp;P 500</span>, using point-in-time
+          membership (a stock is eligible only while it was in the index). Each month it
+          <span class="font-medium text-slate-800">skips the stocks Strategy A holds</span>, so the two baskets
+          never hold the same name — but they are not diversified: both lean heavily on tech, and their monthly
+          returns are clearly correlated (≈0.5). Benchmarked against buy-and-hold
+          <span class="font-medium text-slate-800">SPY</span>. Former members that Yahoo no longer prices are
+          missing, so some survivorship bias remains.
         </p>
       </div>
 
-      <section class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
+      <section data-view="top3" class="mb-6 strategy-stats grid grid-cols-2 sm:grid-cols-4 gap-3" data-el="stats-grid">
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
         <div class="rounded-xl bg-white border border-slate-200 p-4 skeleton h-20"></div>
       </section>
 
-      <section class="strategy-next mb-4 hidden">
+      <section class="strategy-next mb-4 hidden" data-view="top3">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
           <h3 class="text-xs font-semibold uppercase tracking-wider text-indigo-700">
@@ -179,7 +221,7 @@
         <p data-el="next-note" class="mt-2 text-xs text-slate-500"></p>
       </section>
 
-      <section class="mb-6 strategy-open">
+      <section class="mb-6 strategy-open" data-view="top3">
         <div class="flex items-center gap-3 mb-3">
           <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -194,7 +236,39 @@
         <p data-el="open-portfolio-mtd" class="mt-2 text-sm text-slate-500"></p>
       </section>
 
-      <section class="mb-6 strategy-chart hidden">
+      <section class="mb-6 strategy-leaderboard hidden" data-view="top20">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Momentum Top 20 <span data-el="board-label" class="ml-2 text-slate-400 font-normal normal-case tracking-normal"></span>
+          </h3>
+          <div data-el="board-groups" class="flex flex-wrap items-center gap-1"></div>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th class="px-3 py-2 text-right font-semibold">#</th>
+                <th class="px-3 py-2 text-left font-semibold">Ticker</th>
+                <th class="hidden sm:table-cell px-3 py-2 text-left font-semibold">Sector</th>
+                <th class="px-3 py-2 text-left font-semibold" title="6-month average monthly return at the rebalance — the ranking variable">Mom / mo</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Return from the rebalance-day close to the latest close">Since entry</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Return over the last 21 trading days">1M</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Latest close vs the highest close of the last 126 trading days">Off 6M high</th>
+                <th class="px-3 py-2 text-left font-semibold">Trend</th>
+              </tr>
+            </thead>
+            <tbody data-el="board-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <p class="mt-2 text-[11px] text-slate-400 leading-relaxed">
+          Strategy A's current holdings are excluded from this ranking. The strategy buys only the top 3 (<span class="font-semibold text-emerald-700">HELD</span>); the rest is
+          context for manual review. Trend tag — Buy: within 10% of the 6-month high and up over the last month ·
+          Hold: within 20% · Watch: 20–30% off and last month better than −10% · Caution: otherwise.
+          Not part of the strategy. Click a row to chart it; click a sector to filter.
+        </p>
+      </section>
+
+      <section class="mb-6 strategy-chart hidden" data-view="top3 top20">
         <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
             6-Month Daily Candles
@@ -207,7 +281,7 @@
         </div>
       </section>
 
-      <section class="strategy-history">
+      <section class="strategy-history" data-view="top3">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Past <span data-el="history-count">12</span> Rebalances
@@ -219,7 +293,8 @@
     </div>
 
     <footer class="mt-12 pt-6 border-t border-slate-200 text-xs text-slate-400">
-      Data: Yahoo Finance (adjusted close). Survivorship-biased universe (current Nasdaq-100).
+      Data: Yahoo Finance (adjusted close). Point-in-time index membership; delisted former members
+      without Yahoo data are missing, so some survivorship bias remains.
       Returns are gross of transaction cost &amp; slippage. See <code>summary.md</code> for caveats.
     </footer>
   </div>

@@ -20,6 +20,7 @@ boots with prices already on disk.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -37,7 +38,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from src.backtest import run_backtest
-from src.config import BacktestConfig
+from src.config import RAW_PRICES_DIR, BacktestConfig
 from src.download_data import _cache_covers, _download_one, _load_cached
 from src.metrics import calculate_summary_stats
 
@@ -78,13 +79,82 @@ def _safe_float(x: Any) -> Optional[float]:
 
 
 _SP500_PATH = os.path.join(PROJECT_ROOT, "data", "sp500_constituents.csv")
+_SP500_MEMBERSHIP = os.path.join(PROJECT_ROOT, "data", "sp500_membership.csv")
+
+# ticker -> [company, sector group, niche] for the leaderboard (Nasdaq-100).
+with open(os.path.join(os.path.dirname(__file__), "ticker_meta.json")) as _f:
+    _TICKER_META: Dict[str, List[str]] = json.load(_f)
+
+# S&P 500 names outside that list fall back to Wikipedia's GICS labels,
+# mapped onto the same groups where one fits (e.g. "Semiconductors" -> Semis).
+_GICS_SUB_GROUP = {
+    "Semiconductors": "Semis",
+    "Semiconductor Materials & Equipment": "Semi-cap",
+    "Technology Hardware, Storage & Peripherals": "Hardware",
+    "Communications Equipment": "Networking",
+    "Systems Software": "Software",
+    "Application Software": "Software",
+    "Biotechnology": "Biotech",
+    "Electronic Components": "Electronics",
+    "Electronic Equipment & Instruments": "Electronics",
+    "Electronic Manufacturing Services": "Electronics",
+    "Internet Services & Infrastructure": "IT services",
+    "IT Consulting & Other Services": "IT services",
+}
+_GICS_SECTOR_GROUP = {
+    "Information Technology": "Tech",
+    "Health Care": "Healthcare",
+    "Communication Services": "Comm services",
+    "Consumer Discretionary": "Consumer",
+    "Consumer Staples": "Consumer staples",
+    "Real Estate": "Real estate",
+}
+
+
+def _load_gics_meta() -> Dict[str, List[str]]:
+    """ticker -> [company, group, sub-industry] from the S&P constituents CSV."""
+    df = pd.read_csv(_SP500_PATH).dropna(subset=["Security"])
+    return {
+        r["Symbol"]: [
+            r["Security"],
+            _GICS_SUB_GROUP.get(
+                r["GICS Sub-Industry"],
+                _GICS_SECTOR_GROUP.get(r["GICS Sector"], r["GICS Sector"]),
+            ),
+            r["GICS Sub-Industry"],
+        ]
+        for _, r in df.iterrows()
+    }
+
+
+_GICS_META = _load_gics_meta()
+
+
+def _trend_tag(off_6m_high: float, ret_1m: float) -> str:
+    """Trend-health label for the leaderboard — a manual-review aid only.
+
+    Buy: within 10% of the 6-month high and up over the last month.
+    Hold: within 20% of the high. Watch: 20-30% off with the last month
+    better than -10%. Caution: everything else.
+    """
+    if off_6m_high > -0.10 and ret_1m >= 0:
+        return "Buy"
+    if off_6m_high > -0.20:
+        return "Hold"
+    if off_6m_high > -0.30 and ret_1m > -0.10:
+        return "Watch"
+    return "Caution"
 
 
 def _load_sp500() -> List[str]:
-    """Current S&P 500 constituents (scripts/build_sp500.py refreshes them)."""
-    return (
-        pd.read_csv(_SP500_PATH)["Symbol"].astype(str).str.upper().tolist()
-    )
+    """Tickers that were S&P 500 members at any point since 2016 and have
+    cached prices (scripts/build_sp500.py builds both). Removed members that
+    Yahoo no longer serves have no price file and are left out."""
+    tickers = pd.read_csv(_SP500_MEMBERSHIP)["ticker"].astype(str).unique()
+    return [
+        t for t in tickers
+        if os.path.exists(os.path.join(RAW_PRICES_DIR, f"{t}.csv"))
+    ]
 
 
 def _build_exclude_map(results: Dict[str, Any]) -> Dict[pd.Timestamp, set]:
@@ -133,7 +203,8 @@ def _results_to_payload(
 
     recent_pr = portfolio[portfolio["rebalance_date"].isin(completed_dates)]
     window_cum_strategy = float((1.0 + recent_pr["portfolio_return_net"]).prod() - 1.0)
-    window_cum_qqq = float((1.0 + recent_pr["qqq_return"]).prod() - 1.0)
+    # ``qqq_return`` holds the primary benchmark, whichever ticker it is.
+    window_cum_benchmark = float((1.0 + recent_pr["qqq_return"]).prod() - 1.0)
 
     completed_payload: List[Dict[str, Any]] = []
     for _, r in recent_picks.iterrows():
@@ -192,6 +263,28 @@ def _results_to_payload(
             "signal_locked_as_of": pd.Timestamp(np_["exit_date"].iloc[0]).strftime("%Y-%m-%d"),
         }
 
+    leaderboard_payload: List[Dict[str, Any]] = []
+    board: Optional[pd.DataFrame] = results.get("leaderboard")
+    if board is not None and not board.empty:
+        for _, r in board.iterrows():
+            company, group, niche = _TICKER_META.get(
+                r["ticker"], _GICS_META.get(r["ticker"], ["", "", ""])
+            )
+            leaderboard_payload.append({
+                "rank": int(r["rank"]),
+                "ticker": r["ticker"],
+                "company": company,
+                "group": group,
+                "niche": niche,
+                "held": bool(r["held"]),
+                "momentum_score": _safe_float(r["momentum_score"]),
+                "latest_price": _safe_float(r["latest_price"]),
+                "since_entry": _safe_float(r["since_entry"]),
+                "ret_1m": _safe_float(r["ret_1m"]),
+                "off_6m_high": _safe_float(r["off_6m_high"]),
+                "tag": _trend_tag(r["off_6m_high"], r["ret_1m"]),
+            })
+
     def _row(stat: str, col: str) -> Optional[float]:
         try:
             return _safe_float(summary.loc[stat, col])
@@ -208,12 +301,13 @@ def _results_to_payload(
         "open_meta": open_meta,
         "next": next_payload,
         "next_meta": next_meta,
+        "leaderboard": leaderboard_payload,
         "window": {
             "first_date": completed_dates[0].strftime("%Y-%m-%d") if completed_dates else None,
             "last_date": completed_dates[-1].strftime("%Y-%m-%d") if completed_dates else None,
             "months": len(completed_dates),
             "cum_strategy": window_cum_strategy,
-            "cum_qqq": window_cum_qqq,
+            "cum_benchmark": window_cum_benchmark,
         },
         "stats": {
             "strategy": {
@@ -221,9 +315,9 @@ def _results_to_payload(
                 "sharpe": _row("sharpe_ratio", "strategy"),
                 "max_drawdown": _row("max_drawdown", "strategy"),
                 "total_return": _row("total_return", "strategy"),
-                "win_rate_vs_qqq": _row("win_rate_vs_qqq", "strategy"),
+                "win_rate_vs_benchmark": _row("win_rate_vs_qqq", "strategy"),
             },
-            "qqq": {
+            "benchmark": {
                 "cagr": _row("CAGR", "benchmark_qqq"),
                 "total_return": _row("total_return", "benchmark_qqq"),
                 "max_drawdown": _row("max_drawdown", "benchmark_qqq"),
@@ -265,6 +359,7 @@ def _compute_payload(
         "rebalance_period_months": period,
         "label": f"L={lookback}m / P={period}m",
         "universe": "Nasdaq-100",
+        "benchmark": "QQQ",
     }
     return _results_to_payload(results, today, started, period, history, meta)
 
@@ -273,11 +368,13 @@ def _compute_payload(
 _NASDAQ_META = {
     "id": "nasdaq100", "lookback_months": 6, "rebalance_period_months": 1,
     "label": "6-month momentum, monthly rebalance", "universe": "Nasdaq-100",
+    "benchmark": "QQQ",
 }
 _SP500_META = {
     "id": "sp500", "lookback_months": 6, "rebalance_period_months": 1,
     "label": "6-month momentum, monthly rebalance",
-    "universe": "S&P 500 · excludes the Nasdaq-100 basket's picks",
+    "universe": "S&P 500 (point-in-time) · excludes Strategy A's holdings",
+    "benchmark": "SPY",
 }
 
 
@@ -299,7 +396,11 @@ def _compute_dashboard(
     exclude = _build_exclude_map(res_a)
     started_b = time.time()
     res_b = run_backtest(
-        BacktestConfig(tickers=_load_sp500(), use_historical_membership=False, **common),
+        BacktestConfig(
+            tickers=_load_sp500(), use_historical_membership=True,
+            membership_path=_SP500_MEMBERSHIP, benchmark="SPY",
+            secondary_benchmark="", **common,
+        ),
         exclude_by_date=exclude,
     )
     payload_b = _results_to_payload(res_b, today, started_b, 1, history, dict(_SP500_META))
