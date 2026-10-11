@@ -31,6 +31,11 @@ REQUIRED_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 # or revised prints and keeps the merge seam continuous.
 INCREMENTAL_OVERLAP_DAYS = 5
 
+# A split or dividend re-adjustment rescales the provider's whole adjusted
+# series, so the cached and freshly fetched bars stop agreeing on the
+# overlap. Past this relative gap the cache is rebuilt from scratch.
+ADJUSTMENT_TOLERANCE = 0.001
+
 # yfinance calls are network-bound, so fetch tickers concurrently. Kept
 # modest to stay well under Yahoo's rate limits.
 MAX_DOWNLOAD_WORKERS = 8
@@ -112,6 +117,21 @@ def _cache_covers(df: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> b
     cached_end = df.index.max()
     end_tolerance = end - pd.Timedelta(days=3)
     return cached_end >= end_tolerance
+
+
+def _adjustment_changed(cached: pd.DataFrame, fresh: pd.DataFrame) -> bool:
+    """Return True when ``fresh`` disagrees with ``cached`` on shared bars.
+
+    Merging a fresh tail onto a cache built on an older adjustment basis
+    leaves a fake price jump at the seam (e.g. a 4:1 split shows up as a
+    -75% day). The last cached bar is skipped: it may be an intraday
+    print that the fresh download legitimately replaces with the close.
+    """
+    shared = cached.index[:-1].intersection(fresh.index)
+    if shared.empty:
+        return False
+    ratio = fresh.loc[shared, "Close"] / cached.loc[shared, "Close"]
+    return bool((ratio - 1.0).abs().max() > ADJUSTMENT_TOLERANCE)
 
 
 def _download_one(
@@ -269,6 +289,21 @@ def _fetch_ticker_close(
             LOGGER.info("Downloading %s (full history)", ticker)
 
         fresh = _download_one(ticker, dl_start, end)
+        if fresh is not None and cached is not None and _adjustment_changed(cached, fresh):
+            # The provider re-adjusted history (split/dividend): a tail
+            # merge would splice two bases together, so refetch it all.
+            LOGGER.warning(
+                "Adjustment basis changed for %s; re-downloading full history",
+                ticker,
+            )
+            full = _download_one(ticker, min(start, cached.index.min()), end)
+            # Delisted/merged names can come back as a stub of a few bars;
+            # never trade the cached history for a shorter series.
+            if full is not None and full.index.min() <= cached.index.min() + pd.Timedelta(days=7):
+                fresh, cached = full, None
+            else:
+                # Fall back to the stale but self-consistent cache below.
+                fresh = None
         if fresh is None:
             # Download failed: fall back to whatever we already have
             # rather than dropping the ticker entirely.

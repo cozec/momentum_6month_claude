@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -18,6 +21,7 @@ from src.backtest import (  # noqa: E402
     calculate_portfolio_return,
     compute_next_position,
 )
+from src import download_data  # noqa: E402
 from src.config import BacktestConfig  # noqa: E402
 from src.signals import (  # noqa: E402
     calculate_momentum_scores,
@@ -302,6 +306,66 @@ class TestComputeNextPosition(unittest.TestCase):
             pd.Timestamp(result_june["rebalance_date"].iloc[0]),
             pd.Timestamp("2026-07-01"),
         )
+
+
+class TestIncrementalCacheAdjustment(unittest.TestCase):
+    """A split between cache refreshes must not splice two price bases."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        patcher = mock.patch.object(download_data, "RAW_PRICES_DIR", self.tmp)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        dates = pd.bdate_range("2026-05-01", "2026-07-31")
+        # Closes around 700 until a 4:1 split on 2026-06-26; afterwards the
+        # provider serves the whole history split-adjusted (divided by 4).
+        raw = pd.Series(700.0 + np.arange(len(dates)), index=dates)
+        self.provider = raw / 4.0
+        # Cache written before the split, on the old adjustment basis.
+        self._write_cache(raw.loc[:"2026-06-24"])
+
+    def _write_cache(self, close: pd.Series) -> None:
+        df = pd.DataFrame({c: close for c in ["Open", "High", "Low", "Close"]})
+        df["Volume"] = 1_000
+        df.to_csv(download_data._cache_path("XYZ"), index_label="Date")
+
+    def _fake_download(self, ticker, start, end, retries=3):
+        close = self.provider.loc[start:end]
+        df = pd.DataFrame({c: close for c in ["Open", "High", "Low", "Close"]})
+        df["Volume"] = 1_000
+        return df.rename_axis("Date")
+
+    def test_split_triggers_full_redownload(self):
+        with mock.patch.object(download_data, "_download_one", side_effect=self._fake_download) as dl:
+            close = download_data._fetch_ticker_close(
+                "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
+                force_refresh=True, full_refresh=False,
+            )
+        self.assertEqual(dl.call_count, 2)
+        self.assertGreater(close.pct_change().min(), -0.05)
+        pd.testing.assert_series_equal(close, self.provider.rename("XYZ"), check_names=False,
+                                       check_freq=False)
+
+    def test_stub_full_download_keeps_cache(self):
+        # Delisted names can return only a handful of recent bars.
+        self.provider = self.provider.loc["2026-06-19":]
+        with mock.patch.object(download_data, "_download_one", side_effect=self._fake_download):
+            download_data._fetch_ticker_close(
+                "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
+                force_refresh=True, full_refresh=False,
+            )
+        cached = download_data._load_cached("XYZ")
+        self.assertEqual(cached.index.min(), pd.Timestamp("2026-05-01"))
+
+    def test_unchanged_basis_merges_tail_only(self):
+        self.provider = pd.Series(700.0 + np.arange(len(self.provider)), index=self.provider.index)
+        with mock.patch.object(download_data, "_download_one", side_effect=self._fake_download) as dl:
+            download_data._fetch_ticker_close(
+                "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
+                force_refresh=True, full_refresh=False,
+            )
+        self.assertEqual(dl.call_count, 1)
 
 
 if __name__ == "__main__":

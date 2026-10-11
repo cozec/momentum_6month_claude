@@ -231,6 +231,14 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
   - Switched the per-ticker fetch from `yf.download` to the thread-safe `Ticker.history` API (`yf.download` writes module-global state and corrupts frames under concurrency), stripping its tz so it still merges with the naive-dated CSV cache.
   - **Result:** a full forced refresh of 103 tickers now completes in **~2.4 s** end-to-end (first strategy ~2.3 s of parallel download, second strategy ~0.07 s from the panel cache); a normal cached reload is ~1.5 ms. All 23 unit tests still pass.
 
+## Price-cache split fix (2026-10-11)
+
+The incremental cache refresh appended fresh bars onto cached history without checking that both were on the same adjustment basis, so a split between refreshes left a fake one-day crash in the cache: CRWD (4:1, 2026-06-26, showed −74%), KLAC (10:1, 2026-06-03, −90%), APH (2:1, 2026-08-07) and CTVA (2026-10-01). 347 other files had small dividend re-adjustment drift.
+
+- **Fix:** `download_data._fetch_ticker_close` now compares the overlapping bars; if they disagree by more than 0.1% it re-downloads the ticker's full history (keeping the cache if the provider only returns a stub, as it does for delisted names). 3 new unit tests; **27/27 pass**.
+- **Repair:** all 521 cached files re-downloaded; EA, WBD, AVB, EQR, PSKY kept from the committed cache because Yahoo now returns only a stub for them.
+- **Impact:** none on reported results — none of the affected names were ever held. Headline (CAGR 57.70%, Sharpe 1.36), all 12 grid combos, and every monthly pick in both dashboard strategies through 2026-10-01 reproduce exactly. It did corrupt the 2026-10-01 top-20 sheet (`top20_2026-10-01.md`): CRWD moves from #18 to #6 and KLAC enters at #16.
+
 ## Caveats
 
 1. **Survivorship bias** — current-constituents universe overstates strategy returns. The grid-search experiment first estimated this at ~31 pp (dropping post-2018 index additions cut CAGR from ~78% to ~47%). With a Wikipedia-sourced PIT membership CSV (`python scripts/build_membership.py` then `--use-historical-membership`), the measured delta is ~25 pp: **CAGR 83.4% → 57.7%, Sharpe 1.43 → 1.36, max DD -36.5% → -30.6%** over the same 117-rebalance window. Sharpe and DD barely move — the strategy *quality* is intact; the excess return is what shrinks. QQQ and TQQQ buy-and-hold figures are unaffected.
