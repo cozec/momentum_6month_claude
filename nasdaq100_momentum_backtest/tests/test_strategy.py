@@ -15,7 +15,6 @@ import pandas as pd
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.backtest import (  # noqa: E402
-    _is_nyse_month_first_holiday,
     _predict_next_first_trading_day,
     _signal_locked_for_next_entry,
     calculate_portfolio_return,
@@ -24,6 +23,7 @@ from src.backtest import (  # noqa: E402
 )
 from src import download_data  # noqa: E402
 from src.config import BacktestConfig  # noqa: E402
+from src.nyse_calendar import NYSEHolidayCalendar  # noqa: E402
 from src.signals import (  # noqa: E402
     calculate_momentum_scores,
     calculate_monthly_returns,
@@ -167,13 +167,24 @@ class TestPredictNextFirstTradingDay(unittest.TestCase):
         result = _predict_next_first_trading_day(pd.Timestamp("2026-05-01"), 2)
         self.assertEqual(result, pd.Timestamp("2026-07-01"))
 
-    def test_is_nyse_holiday_helper(self):
-        self.assertTrue(_is_nyse_month_first_holiday(pd.Timestamp("2026-01-01")))   # NYD
-        self.assertTrue(_is_nyse_month_first_holiday(pd.Timestamp("2023-01-02")))   # observed
-        self.assertTrue(_is_nyse_month_first_holiday(pd.Timestamp("2025-09-01")))   # Labor Day
-        self.assertTrue(_is_nyse_month_first_holiday(pd.Timestamp("2031-09-01")))   # Labor Day
-        self.assertFalse(_is_nyse_month_first_holiday(pd.Timestamp("2026-06-01")))  # regular Mon
-        self.assertFalse(_is_nyse_month_first_holiday(pd.Timestamp("2026-01-02")))  # not observed (Jan 1 = Thu)
+    def test_good_friday_at_month_end(self):
+        # Good Friday 2018 was Fri Mar 30, so Thu Mar 29 was March's last
+        # session and its close locks the Mon Apr 2 entry.
+        self.assertEqual(
+            _predict_next_first_trading_day(pd.Timestamp("2018-03-01"), 1),
+            pd.Timestamp("2018-04-02"),
+        )
+        prices = _make_daily_prices("2017-01-01", "2018-03-29", ["AAA"])
+        self.assertTrue(_signal_locked_for_next_entry(prices, pd.Timestamp("2018-04-02")))
+
+    def test_calendar_holidays(self):
+        holidays = NYSEHolidayCalendar().holidays("2026-01-01", "2027-12-31")
+        for day in ["2026-01-01", "2026-04-03", "2026-06-19", "2026-07-03",
+                    "2026-11-26", "2026-12-25", "2027-03-26", "2027-12-24"]:
+            self.assertIn(pd.Timestamp(day), holidays, day)
+        # New Year's Day on a Saturday is not observed on the prior Friday.
+        self.assertNotIn(pd.Timestamp("2021-12-31"),
+                         NYSEHolidayCalendar().holidays("2021-12-01", "2022-01-31"))
 
 
 class TestSignalLockedCheck(unittest.TestCase):
@@ -218,14 +229,29 @@ class TestSignalLockedCheck(unittest.TestCase):
         )
 
     def test_memorial_day_landing_on_31st(self):
-        # 2027-05-31 is a Monday = Memorial Day. Last trading day of May 2027
-        # is Fri 2027-05-28. The generic BDay walks May 28 → May 31 (same
-        # month), so a naive BDay(1) check would say "not locked" incorrectly.
-        # Our 3-day look-ahead absorbs this: May 28 + 2 BDays = Jun 1.
+        # 2027-05-31 is a Monday = Memorial Day, so Fri 2027-05-28 is the
+        # last trading day of May and its close locks the June signal.
         prices = self._prices_ending("2027-05-28")
         self.assertTrue(
             _signal_locked_for_next_entry(prices, pd.Timestamp("2027-06-01"))
         )
+
+
+    def test_not_locked_before_the_last_trading_day(self):
+        # October 2026 ends on Fri Oct 30: data through Wed Oct 28 or
+        # Thu Oct 29 is still missing the month's final close.
+        for end in ["2026-10-28", "2026-10-29"]:
+            self.assertFalse(
+                _signal_locked_for_next_entry(self._prices_ending(end), pd.Timestamp("2026-11-02")),
+                end,
+            )
+        self.assertTrue(
+            _signal_locked_for_next_entry(self._prices_ending("2026-10-30"), pd.Timestamp("2026-11-02"))
+        )
+
+    def test_not_locked_once_entry_day_has_data(self):
+        prices = self._prices_ending("2026-11-02")
+        self.assertFalse(_signal_locked_for_next_entry(prices, pd.Timestamp("2026-11-02")))
 
 
 class TestComputeNextPosition(unittest.TestCase):
@@ -411,6 +437,44 @@ class TestSp500Membership(unittest.TestCase):
         self.assertEqual(list(_build_membership(cfg)["ticker"]), ["ZZZ"])
 
 
+class TestPicksEmail(unittest.TestCase):
+    """Month-end trade email: when to send and what the trades are."""
+
+    def setUp(self):
+        import send_picks_email
+        self.mod = send_picks_email
+        self.a = {
+            "strategy": {"universe": "Nasdaq-100", "label": "6-month momentum", "benchmark": "QQQ"},
+            "open": [{"ticker": "MU", "rank": 1, "stock_return": 0.05, "entry_price": 100.0, "latest_price": 105.0},
+                     {"ticker": "INTC", "rank": 2, "stock_return": None, "entry_price": None, "latest_price": None},
+                     {"ticker": "SNDK", "rank": 3, "stock_return": -0.1, "entry_price": 10.0, "latest_price": 9.0}],
+            "open_meta": {"entry_date": "2026-10-01", "mtd_portfolio_return": None},
+            "next": [{"ticker": "MU", "rank": 1, "momentum_score": 0.2, "entry_price_estimate": 105.0},
+                     {"ticker": "AMD", "rank": 2, "momentum_score": None, "entry_price_estimate": None},
+                     {"ticker": "CRWD", "rank": 3, "momentum_score": 0.18, "entry_price_estimate": 300.0}],
+            "next_meta": {"planned_entry_date": "2026-11-02", "signal_locked_as_of": "2026-10-30"},
+            "stats": {"strategy": {"cagr": 0.5, "sharpe": None, "max_drawdown": -0.3}, "benchmark": {}},
+        }
+        self.bundle = {"strategies": [self.a]}
+
+    def test_sends_only_on_the_lock_day(self):
+        self.assertTrue(self.mod.should_send(self.bundle, "2026-10-30"))
+        self.assertFalse(self.mod.should_send(self.bundle, "2026-10-31"))  # weekend rerun
+        self.assertFalse(self.mod.should_send({"strategies": [dict(self.a, next=[])]}, "2026-10-30"))
+        self.assertTrue(self.mod.should_send({"strategies": [dict(self.a, next=[])]}, "2026-10-27", force=True))
+
+    def test_trade_list(self):
+        self.assertEqual(self.mod.trades(self.a),
+                         {"sell": ["INTC", "SNDK"], "buy": ["AMD", "CRWD"], "keep": ["MU"]})
+
+    def test_email_builds_with_missing_values(self):
+        email = self.mod.build_email(self.bundle)
+        self.assertIn("2026-11-02", email["subject"])
+        self.assertIn("sell INTC, SNDK; buy AMD, CRWD; keep MU", email["subject"])
+        self.assertIn("market-on-close", email["html"])
+        self.assertIn("—", email["html"])
+
+
 class TestIncrementalCacheAdjustment(unittest.TestCase):
     """A split between cache refreshes must not splice two price bases."""
 
@@ -462,6 +526,17 @@ class TestIncrementalCacheAdjustment(unittest.TestCase):
             )
         cached = download_data._load_cached("XYZ")
         self.assertEqual(cached.index.min(), pd.Timestamp("2026-05-01"))
+
+    def test_unsettled_bar_is_dropped_until_after_the_close(self):
+        df = pd.DataFrame({"Close": [1.0, 2.0]},
+                          index=pd.to_datetime(["2026-10-29", "2026-10-30"]))
+        ny = lambda s: pd.Timestamp(s, tz="America/New_York")  # noqa: E731
+        intraday = download_data._drop_unsettled_bar(df, now=ny("2026-10-30 11:00"))
+        self.assertEqual(list(intraday.index), [pd.Timestamp("2026-10-29")])
+        evening = download_data._drop_unsettled_bar(df, now=ny("2026-10-30 18:00"))
+        self.assertEqual(len(evening), 2)
+        next_morning = download_data._drop_unsettled_bar(df, now=ny("2026-10-31 09:00"))
+        self.assertEqual(len(next_morning), 2)
 
     def test_failed_refresh_is_not_retried_immediately(self):
         with mock.patch.object(download_data, "_download_one", return_value=None) as dl:

@@ -1,26 +1,28 @@
-"""Email the latest momentum picks via Resend.
+"""Email next month's momentum trades via Resend.
 
-Designed to be run as a monthly cron (Render → Cron Job, GitHub Actions,
-PythonAnywhere scheduled task, or a plain crontab):
-
-    0 22 1 * *   python send_picks_email.py
+Runs from a daily cron over the last days of each month (see
+``.github/workflows/monthly-picks-email.yml``) and only sends on the evening
+of the month's last NYSE trading day — the close that locks next month's
+picks — so the trades can be placed as market-on-close orders on the next
+first trading day, matching the backtest's fill.
 
 The script:
-  1. GETs /api/picks for both strategies (L=6m/P=1m and L=3m/P=2m)
-     against ``MOMENTUM_API_BASE`` (defaults to the local dev URL).
-  2. Builds a clean HTML email summarizing the open holdings for each
-     and the equal-weight MTD return.
-  3. POSTs to the Resend ``/emails`` endpoint using ``RESEND_API_KEY``.
+  1. GETs ``/api/dashboard`` (both strategies) from ``MOMENTUM_API_BASE``.
+  2. Skips unless Strategy A's next picks are locked as of today's New York
+     date (``FORCE_SEND=1`` sends anyway, for smoke tests).
+  3. Builds an HTML + text email with each strategy's trade list (sell /
+     buy / keep), next picks and current holdings, and POSTs it to Resend.
 
-Env vars (set in Render → Cron Job → Environment, or ``.env``):
+Env vars:
   RESEND_API_KEY    required — get a key from https://resend.com
   EMAIL_FROM        required — verified Resend sender (e.g. picks@yourdomain.com)
   EMAIL_TO          required — comma-separated recipient(s)
   MOMENTUM_API_BASE optional — defaults to http://127.0.0.1:8765
-  REFRESH           optional — set to "1" to force backend re-download
+  REFRESH           optional — "1" forces the backend to re-download prices
+  FORCE_SEND        optional — "1" sends even when the signal isn't locked today
 
 Exit codes:
-  0  email sent
+  0  email sent, or nothing to send today
   1  any failure (API down, Resend rejected, missing env, etc.)
 """
 
@@ -33,7 +35,8 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 
 def _env(name: str, default: str = "") -> str:
@@ -52,15 +55,12 @@ RESEND_API_KEY = _env("RESEND_API_KEY")
 EMAIL_FROM = _env("EMAIL_FROM")
 EMAIL_TO = _env("EMAIL_TO")
 FORCE_REFRESH = _env("REFRESH", "0") == "1"
+FORCE_SEND = _env("FORCE_SEND", "0") == "1"
 HTTP_TIMEOUT = int(_env("HTTP_TIMEOUT", "120"))
-
-STRATEGIES = [
-    {"label": "Strategy A · L=6m / P=1m (baseline)", "lookback": 6, "period": 1},
-    {"label": "Strategy B · L=3m / P=2m (grid winner)", "lookback": 3, "period": 2},
-]
 
 
 def _http_get(url: str) -> bytes:
+    """GET ``url`` with a non-default User-Agent and return the body."""
     req = urllib.request.Request(
         url,
         headers={
@@ -79,6 +79,7 @@ _RETRYABLE_STATUSES = {502, 503, 504}
 
 
 def _http_get_json(url: str, *, attempts: int = 4, backoff: float = 8.0) -> Dict[str, Any]:
+    """GET JSON, retrying gateway errors and timeouts with linear backoff."""
     last_err: Exception | None = None
     for i in range(1, attempts + 1):
         try:
@@ -103,7 +104,7 @@ def _http_get_json(url: str, *, attempts: int = 4, backoff: float = 8.0) -> Dict
 
 
 def _warm_service() -> None:
-    """Pre-warm the web service so the heavy /api/picks call doesn't
+    """Pre-warm the web service so the heavy dashboard call doesn't
     hit a cold worker. /health returns instantly when the service is
     live, so we burn the 30-60s wake-up window here instead of in
     the expensive request."""
@@ -116,16 +117,14 @@ def _warm_service() -> None:
         sys.stderr.write(f"Warm-up gave up: {e}; proceeding anyway.\n")
 
 
-def _fetch_strategy(lookback: int, period: int) -> Dict[str, Any]:
-    qs = f"lookback={lookback}&period={period}"
-    if FORCE_REFRESH:
-        qs += "&refresh=1"
-    return _http_get_json(f"{API_BASE}/api/picks?{qs}")
+def _fetch_dashboard() -> Dict[str, Any]:
+    """Both strategies' payloads from ``/api/dashboard``."""
+    qs = "?refresh=1" if FORCE_REFRESH else ""
+    return _http_get_json(f"{API_BASE}/api/dashboard{qs}")
 
 
 def _fmt_pct(x: Any, digits: int = 1) -> str:
-    if x is None:
-        return "—"
+    """Format a fraction as a signed percentage; "—" when missing."""
     try:
         v = float(x)
     except (TypeError, ValueError):
@@ -134,92 +133,186 @@ def _fmt_pct(x: Any, digits: int = 1) -> str:
     return f"{sign}{v * 100:.{digits}f}%"
 
 
-def _pick_row(pick: Dict[str, Any]) -> str:
-    color = "#047857" if pick.get("stock_return", 0) >= 0 else "#B91C1C"
-    return f"""
-      <tr>
-        <td style="padding:6px 12px;font-weight:600;color:#0F172A;">#{pick['rank']}</td>
-        <td style="padding:6px 12px;font-weight:700;color:#0F172A;font-size:16px;">{pick['ticker']}</td>
-        <td style="padding:6px 12px;font-weight:600;color:{color};">{_fmt_pct(pick.get('stock_return'))}</td>
-        <td style="padding:6px 12px;color:#475569;">${pick.get('entry_price', 0):.2f} → ${pick.get('latest_price', 0):.2f}</td>
-      </tr>"""
+def _fmt_price(x: Any) -> str:
+    """Format a price as ``$1,234.56``; "—" when missing."""
+    try:
+        return f"${float(x):,.2f}"
+    except (TypeError, ValueError):
+        return "—"
 
 
-def _strategy_block(label: str, data: Dict[str, Any]) -> str:
-    opens: List[Dict[str, Any]] = data.get("open", []) or []
-    meta = data.get("open_meta", {}) or {}
-    stats = (data.get("stats", {}) or {}).get("strategy", {}) or {}
-    mtd = meta.get("mtd_portfolio_return")
-    mtd_str = _fmt_pct(mtd) if mtd is not None else "—"
-    rows = "\n".join(_pick_row(p) for p in opens) if opens else (
-        "<tr><td colspan='4' style='padding:12px;color:#64748B;font-style:italic'>"
-        "No open rebalance.</td></tr>"
+def _fmt_num(x: Any, digits: int = 2) -> str:
+    """Format a plain number; "—" when missing."""
+    try:
+        return f"{float(x):.{digits}f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def should_send(bundle: Dict[str, Any], today: str, force: bool = False) -> bool:
+    """True when today's close locked the next picks (or ``force``).
+
+    ``today`` is the New York date (YYYY-MM-DD). The lock date is the last
+    trading day before the next entry, so a run on any later day of the
+    month (a holiday or the weekend) does not send a duplicate.
+    """
+    if force:
+        return True
+    strategies = bundle.get("strategies") or []
+    if not strategies:
+        return False
+    first = strategies[0]
+    locked_as_of = (first.get("next_meta") or {}).get("signal_locked_as_of")
+    return bool(first.get("next")) and locked_as_of == today
+
+
+def trades(data: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Sell / buy / keep lists moving from the open holdings to the next picks."""
+    held = [p["ticker"] for p in data.get("open") or []]
+    nxt = [p["ticker"] for p in data.get("next") or []]
+    return {
+        "sell": [t for t in held if t not in nxt],
+        "buy": [t for t in nxt if t not in held],
+        "keep": [t for t in nxt if t in held],
+    }
+
+
+def _label(data: Dict[str, Any]) -> str:
+    """Strategy heading, e.g. "Nasdaq-100 · 6-month momentum, monthly rebalance"."""
+    meta = data.get("strategy") or {}
+    return f"{meta.get('universe', '')} · {meta.get('label', '')}"
+
+
+def _trade_line(data: Dict[str, Any]) -> str:
+    """One-line trade summary used in the subject and text body."""
+    t = trades(data)
+    if not data.get("next"):
+        return "no new picks yet"
+    parts = []
+    if t["sell"]:
+        parts.append("sell " + ", ".join(t["sell"]))
+    if t["buy"]:
+        parts.append("buy " + ", ".join(t["buy"]))
+    if t["keep"]:
+        parts.append("keep " + ", ".join(t["keep"]))
+    return "; ".join(parts) or "no change"
+
+
+_TD = "padding:6px 12px;"
+_TH = ("padding:8px 12px;text-align:left;font-size:11px;color:#64748B;"
+       "text-transform:uppercase;letter-spacing:.05em")
+
+
+def _table(headers: List[str], rows: List[List[str]]) -> str:
+    """A small bordered HTML table."""
+    head = "".join(f'<th style="{_TH}">{h}</th>' for h in headers)
+    body = "".join(
+        "<tr>" + "".join(f'<td style="{_TD}">{c}</td>' for c in row) + "</tr>"
+        for row in rows
     )
+    return (
+        '<table cellspacing="0" cellpadding="0" style="width:100%;border:1px solid #E2E8F0;'
+        'border-radius:8px;border-collapse:separate;border-spacing:0;overflow:hidden">'
+        f'<thead><tr style="background:#F8FAFC">{head}</tr></thead><tbody>{body}</tbody></table>'
+    )
+
+
+def _strategy_block(data: Dict[str, Any]) -> str:
+    """HTML section for one strategy: trades, next picks, current holdings."""
+    t = trades(data)
+    nxt = data.get("next") or []
+    opens = data.get("open") or []
+    next_meta = data.get("next_meta") or {}
+    open_meta = data.get("open_meta") or {}
+    stats = (data.get("stats") or {}).get("strategy") or {}
+    bench = (data.get("stats") or {}).get("benchmark") or {}
+    bm = (data.get("strategy") or {}).get("benchmark", "benchmark")
+
+    def chips(names: List[str], color: str) -> str:
+        return " ".join(
+            f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;'
+            f'background:{color};color:white;font-weight:700;font-size:13px">{n}</span>'
+            for n in names
+        ) or '<span style="color:#94A3B8">—</span>'
+
+    trade_rows = [
+        ["<b>Sell</b>", chips(t["sell"], "#B91C1C")],
+        ["<b>Buy</b>", chips(t["buy"], "#047857")],
+        ["<b>Keep</b>", chips(t["keep"], "#475569")],
+    ]
+    next_rows = [
+        [f"#{p.get('rank')}", f"<b>{p.get('ticker')}</b>", _fmt_pct(p.get("momentum_score")),
+         _fmt_price(p.get("entry_price_estimate"))]
+        for p in nxt
+    ]
+    open_rows = [
+        [f"#{p.get('rank')}", f"<b>{p.get('ticker')}</b>", _fmt_pct(p.get("stock_return")),
+         f"{_fmt_price(p.get('entry_price'))} → {_fmt_price(p.get('latest_price'))}"]
+        for p in opens
+    ]
+    entry = next_meta.get("planned_entry_date", "—")
     return f"""
       <div style="margin-bottom:32px">
-        <div style="font-size:18px;font-weight:700;color:#0F172A;margin-bottom:4px">{label}</div>
+        <div style="font-size:18px;font-weight:700;color:#0F172A;margin-bottom:4px">{_label(data)}</div>
         <div style="font-size:12px;color:#64748B;margin-bottom:12px">
-          entry {meta.get('entry_date', '—')} · MTD as of {meta.get('as_of', '—')}
+          Trades for the {entry} close · signal locked {next_meta.get('signal_locked_as_of', '—')}
         </div>
-        <table cellspacing="0" cellpadding="0" style="width:100%;border:1px solid #E2E8F0;border-radius:8px;border-collapse:separate;border-spacing:0;overflow:hidden">
-          <thead>
-            <tr style="background:#F8FAFC">
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.05em">Rank</th>
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.05em">Ticker</th>
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.05em">Return</th>
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.05em">Entry → Last</th>
-            </tr>
-          </thead>
-          <tbody>{rows}</tbody>
-        </table>
-        <div style="margin-top:10px;font-size:13px;color:#475569">
-          Equal-weight portfolio MTD: <b style="color:{'#047857' if (mtd or 0) >= 0 else '#B91C1C'}">{mtd_str}</b>
-          &nbsp;·&nbsp; Strategy CAGR: <b>{_fmt_pct(stats.get('cagr'))}</b>
-          &nbsp;·&nbsp; Sharpe: <b>{stats.get('sharpe', 0):.2f}</b>
-          &nbsp;·&nbsp; Max DD: <b>{_fmt_pct(stats.get('max_drawdown'))}</b>
+        {_table(["Action", "Tickers"], trade_rows)}
+        <div style="font-size:13px;font-weight:600;color:#0F172A;margin:16px 0 6px">Next picks (equal weight, ⅓ each)</div>
+        {_table(["Rank", "Ticker", "Momentum / mo", "Last close"], next_rows) if next_rows else '<i style="color:#64748B">Not locked yet.</i>'}
+        <div style="font-size:13px;font-weight:600;color:#0F172A;margin:16px 0 6px">
+          Current holdings · entry {open_meta.get('entry_date', '—')} · month to date {_fmt_pct(open_meta.get('mtd_portfolio_return'))}
+        </div>
+        {_table(["Rank", "Ticker", "Return", "Entry → last"], open_rows) if open_rows else '<i style="color:#64748B">None.</i>'}
+        <div style="margin-top:10px;font-size:12px;color:#475569">
+          Backtest: CAGR <b>{_fmt_pct(stats.get('cagr'))}</b> ({bm} {_fmt_pct(bench.get('cagr'))})
+          · Sharpe <b>{_fmt_num(stats.get('sharpe'))}</b>
+          · Max DD <b>{_fmt_pct(stats.get('max_drawdown'))}</b> ({bm} {_fmt_pct(bench.get('max_drawdown'))})
         </div>
       </div>"""
 
 
-def _build_email(data_by_strategy: List[Dict[str, Any]]) -> Dict[str, str]:
-    today = datetime.now().strftime("%Y-%m-%d")
-    blocks = "\n".join(
-        _strategy_block(s["label"], d)
-        for s, d in zip(STRATEGIES, data_by_strategy)
-    )
+def build_email(bundle: Dict[str, Any]) -> Dict[str, str]:
+    """Subject, HTML and text bodies for the month-end trade email."""
+    strategies = bundle.get("strategies") or []
+    entry = ((strategies[0].get("next_meta") or {}).get("planned_entry_date", "")
+             if strategies else "")
+    letters = "ABCDEFGH"
+    summary = " | ".join(f"{letters[i]}: {_trade_line(d)}" for i, d in enumerate(strategies))
+    subject = f"Momentum trades for {entry or 'next rebalance'} — {summary}"
+
+    blocks = "\n".join(_strategy_block(d) for d in strategies)
     html = f"""<!doctype html>
 <html><body style="font-family:'Inter',system-ui,sans-serif;background:#F8FAFC;color:#0F172A;margin:0;padding:24px">
-<div style="max-width:640px;margin:0 auto;background:white;border:1px solid #E2E8F0;border-radius:12px;padding:24px">
-  <div style="font-size:22px;font-weight:800;margin-bottom:4px">Nasdaq-100 Momentum Picks</div>
-  <div style="font-size:12px;color:#64748B;margin-bottom:24px">{today} · {API_BASE}</div>
+<div style="max-width:680px;margin:0 auto;background:white;border:1px solid #E2E8F0;border-radius:12px;padding:24px">
+  <div style="font-size:22px;font-weight:800;margin-bottom:4px">Momentum rotation · next month's trades</div>
+  <div style="font-size:13px;color:#475569;margin-bottom:24px">
+    Place <b>market-on-close</b> orders on <b>{entry or '—'}</b> (the first trading day) to match the backtest's fill.
+    Dashboard: <a href="{API_BASE}">{API_BASE}</a>
+  </div>
   {blocks}
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E2E8F0;font-size:11px;color:#94A3B8">
-    Data: Yahoo Finance (adjusted close). Survivorship-biased universe (current Nasdaq-100).
-    Returns are gross of transaction cost &amp; slippage.
+    Data: Yahoo Finance (adjusted close). Point-in-time index membership; delisted former members without
+    Yahoo data are missing, so some survivorship bias remains. Backtest returns are gross of transaction
+    cost &amp; slippage. Not investment advice.
   </div>
 </div></body></html>"""
 
-    text_lines = [f"Nasdaq-100 Momentum Picks — {today}", ""]
-    for strat, data in zip(STRATEGIES, data_by_strategy):
-        meta = data.get("open_meta", {}) or {}
-        text_lines.append(f"== {strat['label']} ==")
-        text_lines.append(
-            f"entry {meta.get('entry_date', '—')} · MTD as of {meta.get('as_of', '—')}"
-        )
-        for p in data.get("open", []) or []:
-            text_lines.append(
-                f"  #{p['rank']}  {p['ticker']:<6}  {_fmt_pct(p.get('stock_return')):>7}  "
-                f"${p.get('entry_price', 0):.2f} → ${p.get('latest_price', 0):.2f}"
-            )
-        mtd = meta.get("mtd_portfolio_return")
-        text_lines.append(f"  portfolio MTD: {_fmt_pct(mtd)}")
-        text_lines.append("")
-
-    subject = f"Momentum picks — {today}"
-    return {"subject": subject, "html": html, "text": "\n".join(text_lines)}
+    lines = [f"Momentum trades for {entry} (market-on-close on the first trading day)", ""]
+    for d in strategies:
+        lines.append(f"== {_label(d)} ==")
+        lines.append(f"  {_trade_line(d)}")
+        for p in d.get("next") or []:
+            lines.append(f"  next #{p.get('rank')} {p.get('ticker', ''):<6} last close {_fmt_price(p.get('entry_price_estimate'))}")
+        mtd = (d.get("open_meta") or {}).get("mtd_portfolio_return")
+        lines.append(f"  current holdings month to date: {_fmt_pct(mtd)}")
+        lines.append("")
+    lines.append(API_BASE)
+    return {"subject": subject, "html": html, "text": "\n".join(lines)}
 
 
 def _send_via_resend(subject: str, html: str, text: str) -> Dict[str, Any]:
+    """POST the email to Resend and return its JSON response."""
     payload = {
         "from": EMAIL_FROM,
         "to": [t.strip() for t in EMAIL_TO.split(",") if t.strip()],
@@ -250,7 +343,8 @@ def _send_via_resend(subject: str, html: str, text: str) -> Dict[str, Any]:
         raise
 
 
-def main() -> int:
+def main(today: Optional[str] = None) -> int:
+    """Send the month-end trade email when today's close locked the picks."""
     missing = [
         name for name, val in (
             ("RESEND_API_KEY", RESEND_API_KEY),
@@ -262,17 +356,19 @@ def main() -> int:
         sys.stderr.write(f"Missing env vars: {', '.join(missing)}\n")
         return 1
 
+    today = today or datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
     _warm_service()
-
     try:
-        data = [
-            _fetch_strategy(s["lookback"], s["period"]) for s in STRATEGIES
-        ]
+        bundle = _fetch_dashboard()
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
-        sys.stderr.write(f"Failed to fetch /api/picks: {e}\n")
+        sys.stderr.write(f"Failed to fetch /api/dashboard: {e}\n")
         return 1
 
-    email = _build_email(data)
+    if not should_send(bundle, today, FORCE_SEND):
+        sys.stdout.write(f"{today}: next picks not locked today; nothing to send.\n")
+        return 0
+
+    email = build_email(bundle)
     result = _send_via_resend(email["subject"], email["html"], email["text"])
     sys.stdout.write(f"Sent: {result.get('id', result)}\n")
     return 0

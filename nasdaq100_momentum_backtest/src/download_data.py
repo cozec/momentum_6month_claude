@@ -124,6 +124,27 @@ def _cache_covers(df: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> b
     return cached_end >= end_tolerance
 
 
+# Yahoo's daily bar for the current session is a live quote until the close
+# settles; keep it out of the cache and the signals until this NY time.
+SESSION_SETTLED = pd.Timedelta(hours=16, minutes=30)
+
+
+def _drop_unsettled_bar(
+    df: Optional[pd.DataFrame], now: Optional[pd.Timestamp] = None
+) -> Optional[pd.DataFrame]:
+    """Drop today's bar while the US session is still open (or just closed).
+
+    ``now`` is the current New York time; it defaults to the clock.
+    """
+    if df is None or df.empty:
+        return df
+    now = now if now is not None else pd.Timestamp.now(tz="America/New_York")
+    today = now.tz_localize(None).normalize() if now.tzinfo else now.normalize()
+    if now - now.normalize() < SESSION_SETTLED:
+        df = df[df.index < today]
+    return df if not df.empty else None
+
+
 def _adjustment_changed(cached: pd.DataFrame, fresh: pd.DataFrame) -> bool:
     """Return True when ``fresh`` disagrees with ``cached`` on shared bars.
 
@@ -306,7 +327,7 @@ def _fetch_ticker_close(
             dl_start = start
             LOGGER.info("Downloading %s (full history)", ticker)
 
-        fresh = _download_one(ticker, dl_start, end)
+        fresh = _drop_unsettled_bar(_download_one(ticker, dl_start, end))
         if fresh is not None and cached is not None and _adjustment_changed(cached, fresh):
             # The provider re-adjusted history (split/dividend): a tail
             # merge would splice two bases together, so refetch it all.
@@ -314,7 +335,9 @@ def _fetch_ticker_close(
                 "Adjustment basis changed for %s; re-downloading full history",
                 ticker,
             )
-            full = _download_one(ticker, min(start, cached.index.min()), end)
+            full = _drop_unsettled_bar(
+                _download_one(ticker, min(start, cached.index.min()), end)
+            )
             # Delisted/merged names can come back as a stub of a few bars;
             # never trade the cached history for a shorter series.
             if full is not None and full.index.min() <= cached.index.min() + pd.Timedelta(days=7):

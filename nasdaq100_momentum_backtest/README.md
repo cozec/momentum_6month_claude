@@ -217,12 +217,12 @@ Render's Free plan doesn't include cron jobs, which is why the schedule lives in
   - `EMAIL_FROM` — Resend-verified sender (e.g. `picks@yourdomain.com`; for testing you can use `onboarding@resend.dev`)
   - `EMAIL_TO` — recipient(s), comma-separated
   - `MOMENTUM_API_BASE` — the Render URL from step 1
-- The workflow at [`.github/workflows/monthly-picks-email.yml`](../.github/workflows/monthly-picks-email.yml) fires automatically at **22:00 UTC on the 1st of each month** (≈ 5–6 pm ET, just after the new month's first-trading-day close).
+- The workflow at [`.github/workflows/monthly-picks-email.yml`](../.github/workflows/monthly-picks-email.yml) runs at **22:30 UTC on the 26th–31st of each month** and sends only on the evening of the month's **last NYSE trading day** — the close that locks next month's picks — so the trades arrive in time for market-on-close orders on the first trading day.
 
 **3. Smoke-test:**
-- GitHub → **Actions → Monthly picks email → Run workflow** → check that you receive the email within ~1 minute (longer if the Render web service is asleep — `send_picks_email.py` pre-warms via `/health` and retries 502s, so wake-ups are absorbed).
+- GitHub → **Actions → Monthly picks email → Run workflow** (a manual run always sends) → check that you receive the email within ~1 minute (longer if the Render web service is asleep — `send_picks_email.py` pre-warms via `/health` and retries 502s, so wake-ups are absorbed).
 
-The email body shows both strategies' open holdings with rank, MTD return, and entry/last prices — same data the dashboard surfaces.
+The email lists each strategy's trades (sell / buy / keep), next picks with the last close, and current holdings with month-to-date return — the same data the dashboard surfaces.
 
 **Gotchas the script already handles (so you don't have to):**
 

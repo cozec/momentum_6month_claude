@@ -24,6 +24,7 @@ import pandas as pd
 from .config import BacktestConfig
 from .download_data import _cache_path, download_price_data
 from .membership import get_eligible_universe, load_nasdaq100_membership
+from .nyse_calendar import first_session_on_or_after, last_session_before
 from .signals import (
     calculate_momentum_scores,
     calculate_monthly_returns,
@@ -368,48 +369,13 @@ def _compute_turnover(
     return float(sum(abs(new.get(t, 0.0) - prior.get(t, 0.0)) for t in tickers))
 
 
-def _is_nyse_month_first_holiday(d: pd.Timestamp) -> bool:
-    """True if ``d`` is an NYSE holiday that can land at or near the
-    1st of a calendar month.
-
-    The only realistic cases are:
-      * Jan 1 — New Year's Day (always closed).
-      * Jan 2 — observed New Year's Day, but only when Jan 1 was a Sunday.
-      * The first Monday of September — Labor Day (can fall on day 1–7).
-
-    Memorial Day / Independence Day / Thanksgiving / Christmas never fall
-    near the 1st, so they are not relevant for predicting the next
-    first-trading-day.
-    """
-    if d.month == 1 and d.day == 1:
-        return True
-    # New Year's observed on Mon Jan 2 when Jan 1 was a Sunday.
-    if d.month == 1 and d.day == 2 and d.weekday() == 0:
-        if pd.Timestamp(d.year, 1, 1).weekday() == 6:  # Sun
-            return True
-    # Labor Day: first Monday of September.
-    if d.month == 9 and d.weekday() == 0 and d.day <= 7:
-        return True
-    return False
-
-
 def _predict_next_first_trading_day(
     current_entry: pd.Timestamp, period_months: int
 ) -> pd.Timestamp:
-    """Predict the next rebalance entry date.
-
-    Rolls the 1st of the target month forward over weekends and the
-    NYSE holidays that can occur at the start of a month (see
-    :func:`_is_nyse_month_first_holiday`).
-    """
+    """Predict the next rebalance entry date: the first NYSE trading day of
+    the month ``period_months`` after ``current_entry``."""
     target = current_entry + pd.DateOffset(months=int(period_months))
-    candidate = pd.Timestamp(target.year, target.month, 1)
-    for _ in range(7):
-        if candidate.weekday() >= 5 or _is_nyse_month_first_holiday(candidate):
-            candidate += pd.Timedelta(days=1)
-            continue
-        break
-    return candidate
+    return first_session_on_or_after(pd.Timestamp(target.year, target.month, 1))
 
 
 def _apply_exclude(scores: pd.Series, exclude) -> pd.Series:
@@ -460,38 +426,13 @@ def _score_at(
 def _signal_locked_for_next_entry(
     prices: pd.DataFrame, next_entry: pd.Timestamp
 ) -> bool:
-    """True iff the most recent data is the last trading day of the
-    calendar month preceding ``next_entry``.
-
-    Two-part test:
-      1. ``prices.index.max()`` must fall in the calendar month immediately
-         before ``next_entry``'s month.
-      2. Stepping forward up to 3 generic business days from that day
-         must cross into a new calendar month. The 3-day window
-         absorbs Memorial Day landing on the 31st (where the actual
-         last NYSE trading day is the preceding Friday, and the next
-         generic BDay is the closed Monday).
-    """
+    """True iff ``prices`` runs through the last NYSE trading day before
+    ``next_entry`` — the close that completes the final monthly return the
+    next signal uses — and not yet into the entry day itself."""
     if prices.empty:
         return False
-    last_data = pd.Timestamp(prices.index.max())
-    # Anchor to the last calendar day of the month *before* next_entry's month.
-    # Subtracting a day from next_entry directly is wrong when the first
-    # trading day isn't the 1st (e.g. Aug 3 after a weekend) — that would
-    # stay in the same month and the signal would never lock.
-    prev_month_anchor = (
-        pd.Timestamp(next_entry.year, next_entry.month, 1) - pd.Timedelta(days=1)
-    )
-    in_prev_month = (
-        last_data.year == prev_month_anchor.year
-        and last_data.month == prev_month_anchor.month
-    )
-    if not in_prev_month:
-        return False
-    for offset in (1, 2, 3):
-        if (last_data + pd.offsets.BDay(offset)).month != last_data.month:
-            return True
-    return False
+    last_data = pd.Timestamp(prices.index.max()).normalize()
+    return last_session_before(next_entry) <= last_data < next_entry
 
 
 def compute_next_position(

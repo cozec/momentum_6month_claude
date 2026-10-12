@@ -219,10 +219,10 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
 | Piece | Service | Notes |
 |---|---|---|
 | Dashboard | Render Free web service (`momentum-web`) | Tailwind SPA showing Strategy A (L=6m/P=1m) and Strategy B (L=3m/P=2m) side-by-side. Sleeps after 15 min idle; first call ≈ 30 s wake + < 1 s after that. |
-| Monthly cron | GitHub Actions (`monthly-picks-email.yml`) | Fires at `0 22 1 * *` UTC. Pre-warms `/health`, fetches both strategies with `refresh=1`, builds an HTML+text email. |
+| Monthly cron | GitHub Actions (`monthly-picks-email.yml`) | Runs at `30 22 26-31 * *` UTC and sends only on the month's last NYSE trading day (when next month's picks lock). Pre-warms `/health`, fetches `/api/dashboard?refresh=1`, emails each strategy's sell / buy / keep list. |
 | Email delivery | Resend (3,000 / mo free) | Cloudflare-fronted; the script sends a non-default `User-Agent` so the POST isn't blocked with code 1010. |
 
-**Behaviour on the 1st of each month:** Strategy A rebalances (new picks scored on the new first-trading-day, MTD ≈ 0% on entry). Strategy B holds for two months, so on every *other* 1st it rolls; in between it just shows the same picks with an updated period-to-date return. The completed previous-month holding becomes a new row in the dashboard's "Past rebalances" feed and is reflected in the next email.
+**Month-end timing:** after the close of the month's last NYSE trading day the dashboard shows both strategies' locked "Next picks" and the email goes out with the trade list; on the first trading day both strategies rebalance at the close (market-on-close), and the completed month becomes a new row in "Past rebalances". The lock uses an NYSE holiday calendar (`src/nyse_calendar.py`), and today's bar is ignored until 16:30 ET so a live intraday price is never treated as a close.
 
 ### Dashboard UX & refresh performance
 
