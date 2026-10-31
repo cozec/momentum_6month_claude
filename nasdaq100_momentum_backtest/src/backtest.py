@@ -326,8 +326,13 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
         open_position = compute_open_position(
             prices, monthly_returns, config, open_entry, exclude=open_exclude
         )
+        prev_entry = rebalance_days[-2] if len(rebalance_days) >= 2 else None
+        prev_exclude = (
+            exclude_by_date.get(prev_entry) if exclude_by_date and prev_entry else None
+        )
         leaderboard = compute_leaderboard(
-            prices, monthly_returns, config, open_entry, exclude=open_exclude
+            prices, monthly_returns, config, open_entry, exclude=open_exclude,
+            prev_entry_date=prev_entry, prev_exclude=prev_exclude,
         )
         if not open_position.empty:
             LOGGER.info(
@@ -554,6 +559,8 @@ def compute_leaderboard(
     entry_date,
     n: int = 20,
     exclude=None,
+    prev_entry_date=None,
+    prev_exclude=None,
 ) -> pd.DataFrame:
     """Rank the top ``n`` names scored at the rebalance on ``entry_date``.
 
@@ -562,19 +569,36 @@ def compute_leaderboard(
     latest close in ``prices``: ``since_entry`` (return from the entry
     close), ``ret_1m`` (last 21 trading days) and ``off_6m_high`` (versus the
     highest close of the last 126 trading days).
+
+    With ``prev_entry_date`` (the previous rebalance) it also reports
+    ``prev_rank`` (NaN when the name wasn't ranked then), ``rank_change``
+    (positive = climbed) and ``momentum_change`` — a view of who is gaining
+    or fading. Informational only: as a stock-picking signal it backtested
+    far worse than the score itself, since the change in a 6-month average
+    is mostly last month's return, which tends to reverse.
     """
     entry_date = to_business_date(entry_date)
     _, scores = _score_at(prices, monthly_returns, config, entry_date, exclude=exclude)
     if scores.empty:
         return pd.DataFrame()
     top = scores.head(n)
+    prev = pd.Series(dtype=float)
+    if prev_entry_date is not None:
+        _, prev = _score_at(
+            prices, monthly_returns, config, to_business_date(prev_entry_date), exclude=prev_exclude
+        )
+    prev_rank = pd.Series(np.arange(1, len(prev) + 1), index=prev.index, dtype=float)
+    ranks = np.arange(1, len(top) + 1)
     recent = prices[top.index].ffill()
     latest = recent.iloc[-1]
     entry = recent.loc[:entry_date].iloc[-1]
     return pd.DataFrame({
-        "rank": range(1, len(top) + 1),
+        "rank": ranks,
         "ticker": top.index,
         "momentum_score": top.values,
+        "prev_rank": prev_rank.reindex(top.index).values,
+        "rank_change": (prev_rank.reindex(top.index) - ranks).values,
+        "momentum_change": (top - prev.reindex(top.index)).values,
         "held": [i < config.top_n for i in range(len(top))],
         "entry_price": entry.values,
         "latest_price": latest.values,

@@ -387,6 +387,26 @@ function signedCell(x, { invert = false } = {}) {
   return `<span class="${good ? 'text-emerald-700' : 'text-red-700'}">${fmtPct(x, 0)}</span>`;
 }
 
+// Rank change since the previous rebalance, plus the Mom/mo change.
+function changeCell(r) {
+  let top;
+  if (r.prev_rank === null || r.prev_rank === undefined) {
+    top = '<span class="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">NEW</span>';
+  } else if (r.rank_change > 0) {
+    top = `<span class="font-semibold text-emerald-700">▲${r.rank_change}</span>`;
+  } else if (r.rank_change < 0) {
+    top = `<span class="font-semibold text-red-700">▼${-r.rank_change}</span>`;
+  } else {
+    top = '<span class="text-slate-400">—</span>';
+  }
+  const prev = r.prev_rank != null ? `was #${r.prev_rank}` : 'not ranked';
+  const mom = r.momentum_change != null
+    ? ` · ${r.momentum_change >= 0 ? '+' : ''}${(r.momentum_change * 100).toFixed(1)} pts`
+    : '';
+  return `<div class="tabular-nums">${top}</div>
+    <div class="text-[11px] text-slate-400 whitespace-nowrap tabular-nums">${prev}${mom}</div>`;
+}
+
 function renderLeaderboard(root, data) {
   const section = root.querySelector('.strategy-leaderboard');
   if (!section) return;
@@ -464,6 +484,7 @@ function renderLeaderboard(root, data) {
             <span class="w-14 text-right font-semibold tabular-nums text-slate-800">${fmtPct(r.momentum_score)}</span>
           </div>
         </td>
+        <td class="px-3 py-2">${changeCell(r)}</td>
         <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.since_entry)}</td>
         <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.ret_1m)}</td>
         <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.off_6m_high, { invert: true })}</td>

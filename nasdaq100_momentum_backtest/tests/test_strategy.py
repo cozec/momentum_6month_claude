@@ -360,6 +360,20 @@ class TestLeaderboard(unittest.TestCase):
         self.assertAlmostEqual(row["ret_1m"], series.iloc[-1] / series.iloc[-22] - 1)
         self.assertLessEqual(row["off_6m_high"], 0.0)
 
+    def test_change_vs_previous_rebalance(self):
+        prev_entry = pd.Timestamp("2026-09-01")
+        board = compute_leaderboard(self.prices, self.monthly, self.config, self.entry,
+                                    prev_entry_date=prev_entry).set_index("ticker")
+        before = calculate_momentum_scores(self.monthly[self.config.tickers], prev_entry)
+        now = calculate_momentum_scores(self.monthly[self.config.tickers], self.entry)
+        for ticker in board.index:
+            was = list(before.index).index(ticker) + 1
+            self.assertEqual(board.loc[ticker, "prev_rank"], was)
+            self.assertEqual(board.loc[ticker, "rank_change"], was - board.loc[ticker, "rank"])
+            self.assertAlmostEqual(board.loc[ticker, "momentum_change"], now[ticker] - before[ticker])
+        no_prev = compute_leaderboard(self.prices, self.monthly, self.config, self.entry)
+        self.assertTrue(no_prev["prev_rank"].isna().all())
+
     def test_exclude_drops_tickers(self):
         first = compute_leaderboard(self.prices, self.monthly, self.config, self.entry)["ticker"].iloc[0]
         board = compute_leaderboard(self.prices, self.monthly, self.config, self.entry, exclude={first})
