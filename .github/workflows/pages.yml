@@ -1,0 +1,44 @@
+name: Deploy report to GitHub Pages
+
+# Publish only the static pages, not the whole repo (price CSVs etc.).
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - report.html
+      - rebalance_example.html
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            index.html
+            report.html
+            rebalance_example.html
+          sparse-checkout-cone-mode: false
+      - name: Stage site
+        run: |
+          mkdir _site
+          cp index.html report.html rebalance_example.html _site/
+          touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+      - id: deployment
+        uses: actions/deploy-pages@v4
