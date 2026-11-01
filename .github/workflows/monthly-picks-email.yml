@@ -91,17 +91,17 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Start dashboard and refresh prices
-            run: |
+        run: |
           nohup python run_webapp.py > webapp.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8765/health && break; sleep 2; done
           curl -sf --max-time 2400 "http://127.0.0.1:8765/api/dashboard?refresh=true" > /dev/null
           tail -5 webapp.log
 
       - name: Build report.html
-            run: python scripts/build_report.py ../report.html
+        run: python scripts/build_report.py ../report.html
 
       - name: Commit report
-            working-directory: .
+        working-directory: .
         run: |
           git config user.name "Adam Wang"
           git config user.email "yadongwang@gmail.com"
@@ -110,19 +110,19 @@ jobs:
           git push
 
       - name: Stage site
-            working-directory: .
+        working-directory: .
         run: |
           mkdir _site
           cp index.html report.html rebalance_example.html _site/
           touch _site/.nojekyll
 
       - uses: actions/upload-pages-artifact@v3
-    
+
       - id: deployment
-            uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v4
 
       - name: Send picks email
-            env:
+        env:
           RESEND_API_KEY:    ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM:        ${{ secrets.EMAIL_FROM }}
           EMAIL_TO:          ${{ secrets.EMAIL_TO }}
