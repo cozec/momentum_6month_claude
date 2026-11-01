@@ -416,9 +416,11 @@ function renderLeaderboard(root, data) {
     return;
   }
   section.classList.remove('hidden');
-  const meta = data.open_meta || {};
-  section.querySelector('[data-el="board-label"]').textContent =
-    `ranked at the ${fmtDay(meta.entry_date)} rebalance · prices through ${fmtDay(meta.as_of)}`;
+  const meta = data.leaderboard_meta || {};
+  const asOf = (data.open_meta || {}).as_of;
+  section.querySelector('[data-el="board-label"]').textContent = meta.upcoming
+    ? `ranked for the ${fmtDay(meta.entry_date)} rebalance · signal locked · prices through ${fmtDay(asOf)}`
+    : `ranked at the ${fmtDay(meta.entry_date)} rebalance · prices through ${fmtDay(asOf)}`;
 
   // Sector chips with counts; clicking one filters the table.
   const counts = new Map();
@@ -460,7 +462,9 @@ function renderLeaderboard(root, data) {
     const rowStyle = [cutoff, isBuy ? 'box-shadow:inset 3px 0 0 #059669' : ''].filter(Boolean).join(';');
     const width = Math.max(2, Math.round(100 * (r.momentum_score || 0) / maxScore));
     const held = r.held
-      ? '<span class="ml-1.5 text-[9px] font-bold tracking-wider px-1 py-0.5 rounded bg-emerald-600 text-white">HELD</span>'
+      ? (meta.upcoming
+        ? '<span class="ml-1.5 text-[9px] font-bold tracking-wider px-1 py-0.5 rounded bg-indigo-600 text-white">NEXT</span>'
+        : '<span class="ml-1.5 text-[9px] font-bold tracking-wider px-1 py-0.5 rounded bg-emerald-600 text-white">HELD</span>')
       : '';
     return `
       <tr data-ticker="${r.ticker}" class="${rowCls} cursor-pointer transition-opacity" style="${rowStyle}">

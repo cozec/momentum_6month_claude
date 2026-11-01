@@ -320,19 +320,12 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
     open_position = pd.DataFrame()
     next_position = pd.DataFrame()
     leaderboard = pd.DataFrame()
+    leaderboard_entry = None
     if len(rebalance_days) >= 1:
         open_entry = rebalance_days[-1]
         open_exclude = exclude_by_date.get(open_entry) if exclude_by_date else None
         open_position = compute_open_position(
             prices, monthly_returns, config, open_entry, exclude=open_exclude
-        )
-        prev_entry = rebalance_days[-2] if len(rebalance_days) >= 2 else None
-        prev_exclude = (
-            exclude_by_date.get(prev_entry) if exclude_by_date and prev_entry else None
-        )
-        leaderboard = compute_leaderboard(
-            prices, monthly_returns, config, open_entry, exclude=open_exclude,
-            prev_entry_date=prev_entry, prev_exclude=prev_exclude,
         )
         if not open_position.empty:
             LOGGER.info(
@@ -354,6 +347,23 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
                 pd.Timestamp(next_position["rebalance_date"].iloc[0]).date(),
                 list(next_position["ticker"]),
             )
+        # Rank the upcoming rebalance once its signal is locked; otherwise
+        # the one that opened the current holding period.
+        if not next_position.empty:
+            board_entry = pd.Timestamp(next_position["rebalance_date"].iloc[0])
+            prev_entry = open_entry
+        else:
+            board_entry = open_entry
+            prev_entry = rebalance_days[-2] if len(rebalance_days) >= 2 else None
+        board_exclude = exclude_by_date.get(board_entry) if exclude_by_date else None
+        prev_exclude = (
+            exclude_by_date.get(prev_entry) if exclude_by_date and prev_entry else None
+        )
+        leaderboard = compute_leaderboard(
+            prices, monthly_returns, config, board_entry, exclude=board_exclude,
+            prev_entry_date=prev_entry, prev_exclude=prev_exclude,
+        )
+        leaderboard_entry = board_entry
 
     return {
         "selections": selections,
@@ -363,6 +373,7 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
         "open_position": open_position,
         "next_position": next_position,
         "leaderboard": leaderboard,
+        "leaderboard_entry": leaderboard_entry,
     }
 
 

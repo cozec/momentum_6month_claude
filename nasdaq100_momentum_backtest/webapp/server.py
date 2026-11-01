@@ -264,8 +264,13 @@ def _results_to_payload(
         }
 
     leaderboard_payload: List[Dict[str, Any]] = []
+    leaderboard_meta: Dict[str, Any] = {}
     board: Optional[pd.DataFrame] = results.get("leaderboard")
     if board is not None and not board.empty:
+        board_entry = pd.Timestamp(results["leaderboard_entry"])
+        # Ranked for a rebalance that hasn't happened yet (signal locked).
+        upcoming = bool(next_meta) and board_entry.strftime("%Y-%m-%d") == next_meta["planned_entry_date"]
+        leaderboard_meta = {"entry_date": board_entry.strftime("%Y-%m-%d"), "upcoming": upcoming}
         for _, r in board.iterrows():
             company, group, niche = _TICKER_META.get(
                 r["ticker"], _GICS_META.get(r["ticker"], ["", "", ""])
@@ -282,7 +287,7 @@ def _results_to_payload(
                 "rank_change": _safe_float(r.get("rank_change")),
                 "momentum_change": _safe_float(r.get("momentum_change")),
                 "latest_price": _safe_float(r["latest_price"]),
-                "since_entry": _safe_float(r["since_entry"]),
+                "since_entry": None if upcoming else _safe_float(r["since_entry"]),
                 "ret_1m": _safe_float(r["ret_1m"]),
                 "off_6m_high": _safe_float(r["off_6m_high"]),
                 "tag": _trend_tag(r["off_6m_high"], r["ret_1m"]),
@@ -305,6 +310,7 @@ def _results_to_payload(
         "next": next_payload,
         "next_meta": next_meta,
         "leaderboard": leaderboard_payload,
+        "leaderboard_meta": leaderboard_meta,
         "window": {
             "first_date": completed_dates[0].strftime("%Y-%m-%d") if completed_dates else None,
             "last_date": completed_dates[-1].strftime("%Y-%m-%d") if completed_dates else None,
