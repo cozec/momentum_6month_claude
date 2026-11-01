@@ -79,14 +79,14 @@ def _safe_float(x: Any) -> Optional[float]:
 
 
 _SP500_PATH = os.path.join(PROJECT_ROOT, "data", "sp500_constituents.csv")
-_SP500_MEMBERSHIP = os.path.join(PROJECT_ROOT, "data", "sp500_membership.csv")
 
 # ticker -> [company, sector group, niche] for the leaderboard (Nasdaq-100).
 with open(os.path.join(os.path.dirname(__file__), "ticker_meta.json")) as _f:
     _TICKER_META: Dict[str, List[str]] = json.load(_f)
 
-# S&P 500 names outside that list fall back to Wikipedia's GICS labels,
-# mapped onto the same groups where one fits (e.g. "Semiconductors" -> Semis).
+# Names outside that list (mostly former members) fall back to Wikipedia's
+# S&P 500 GICS labels, mapped onto the same groups where one fits
+# (e.g. "Semiconductors" -> Semis).
 _GICS_SUB_GROUP = {
     "Semiconductors": "Semis",
     "Semiconductor Materials & Equipment": "Semi-cap",
@@ -144,31 +144,6 @@ def _trend_tag(off_6m_high: float, ret_1m: float) -> str:
     if off_6m_high > -0.30 and ret_1m > -0.10:
         return "Watch"
     return "Caution"
-
-
-def _load_sp500() -> List[str]:
-    """Tickers that were S&P 500 members at any point since 2016 and have
-    cached prices (scripts/build_sp500.py builds both). Removed members that
-    Yahoo no longer serves have no price file and are left out."""
-    tickers = pd.read_csv(_SP500_MEMBERSHIP)["ticker"].astype(str).unique()
-    return [
-        t for t in tickers
-        if os.path.exists(os.path.join(RAW_PRICES_DIR, f"{t}.csv"))
-    ]
-
-
-def _build_exclude_map(results: Dict[str, Any]) -> Dict[pd.Timestamp, set]:
-    """Map each rebalance date -> set of tickers a strategy picked (completed,
-    open, and next), so a second strategy can dedupe against it."""
-    m: Dict[pd.Timestamp, set] = {}
-    for key in ("selections", "open_position", "next_position"):
-        df = results.get(key)
-        if df is None or df.empty:
-            continue
-        dates = pd.to_datetime(df["rebalance_date"])
-        for dt, tk in zip(dates, df["ticker"]):
-            m.setdefault(pd.Timestamp(dt), set()).add(tk)
-    return m
 
 
 def _results_to_payload(
@@ -373,26 +348,16 @@ def _compute_payload(
     return _results_to_payload(results, today, started, period, history, meta)
 
 
-# Dashboard strategies: Nasdaq-100 (baseline) and S&P 500 deduped against it.
+# Dashboard strategy: Nasdaq-100.
 _NASDAQ_META = {
     "id": "nasdaq100", "lookback_months": 6, "rebalance_period_months": 1,
     "label": "6-month momentum, monthly rebalance", "universe": "Nasdaq-100",
     "benchmark": "QQQ",
 }
-_SP500_META = {
-    "id": "sp500", "lookback_months": 6, "rebalance_period_months": 1,
-    "label": "6-month momentum, monthly rebalance",
-    "universe": "S&P 500 (point-in-time) · excludes Strategy A's holdings",
-    "benchmark": "SPY",
-}
-
-
 def _compute_dashboard(
     history: int, refresh: bool, today: pd.Timestamp
 ) -> Dict[str, Any]:
-    """Compute both dashboard strategies. The S&P 500 basket is scored after
-    the Nasdaq-100 one and drops any ticker the Nasdaq basket already holds
-    that month, so the two baskets never overlap."""
+    """Compute the dashboard strategy (Nasdaq-100)."""
     end = today.strftime("%Y-%m-%d")
     common = dict(
         start_date="2016-01-01", end_date=end, force_refresh=refresh,
@@ -402,22 +367,10 @@ def _compute_dashboard(
     res_a = run_backtest(BacktestConfig(use_historical_membership=True, **common))
     payload_a = _results_to_payload(res_a, today, started_a, 1, history, dict(_NASDAQ_META))
 
-    exclude = _build_exclude_map(res_a)
-    started_b = time.time()
-    res_b = run_backtest(
-        BacktestConfig(
-            tickers=_load_sp500(), use_historical_membership=True,
-            membership_path=_SP500_MEMBERSHIP, benchmark="SPY",
-            secondary_benchmark="", **common,
-        ),
-        exclude_by_date=exclude,
-    )
-    payload_b = _results_to_payload(res_b, today, started_b, 1, history, dict(_SP500_META))
-
     return {
         "as_of": today.strftime("%Y-%m-%d"),
         "computed_at": datetime.now().isoformat(timespec="seconds"),
-        "strategies": [payload_a, payload_b],
+        "strategies": [payload_a],
     }
 
 
@@ -506,8 +459,7 @@ def api_dashboard(
     refresh: bool = Query(False, description="Re-download fresh prices"),
     history: int = Query(12, ge=1, le=120, description="Past months to return"),
 ) -> Dict[str, Any]:
-    """The two dashboard baskets in one call: Nasdaq-100, then S&P 500 deduped
-    against it. Cached like the other endpoints (5-min TTL, bypassed on refresh)."""
+    """The dashboard strategy (Nasdaq-100) in one call. Cached like the other endpoints (5-min TTL, bypassed on refresh)."""
     today = pd.Timestamp.now().normalize()
     cache_key = ("dashboard", today.strftime("%Y-%m-%d"))
     now = time.time()

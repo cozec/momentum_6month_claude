@@ -1,18 +1,18 @@
 // Turn the live dashboard into a self-contained static page (report.html).
 // Evaluated in the loaded dashboard by scripts/build_report.py; returns the
 // page HTML. Charts become PNG images, app scripts are dropped, and a small
-// inline script keeps the four view tabs working.
+// inline script keeps the view tabs working.
 async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   for (let i = 0; i < 600; i++) {
     if (document.querySelectorAll('[data-el="chart-container"] canvas').length >= 2 &&
         (document.getElementById('last-updated')?.innerText || '').match(/\d/) &&
-        document.querySelector('#strategy-B [data-el="stats-grid"]').innerText.match(/CAGR/i)) break;
+        document.querySelector('#strategy-A [data-el="stats-grid"]').innerText.match(/CAGR/i)) break;
     await sleep(500);
   }
   await sleep(1000);
   const dpr = window.devicePixelRatio || 1;
-  for (const s of ['A', 'B']) {
+  for (const s of ['A']) {
     // Charts only lay out while their tab is visible.
     document.querySelector(`[data-view-tab="${s}:top3"]`).click();
     await sleep(800);
@@ -52,7 +52,7 @@ b.className='flex flex-col items-start rounded-xl border px-4 py-2.5 text-left t
 b.querySelector('small').className='text-[11px] '+(on?'text-slate-300':'text-slate-500');b.setAttribute('aria-selected',String(on));});
 history.replaceState(null,'','#'+s.toLowerCase()+'-'+m);}
 document.querySelectorAll('[data-view-tab]').forEach(b=>b.addEventListener('click',()=>applyView(b.dataset.viewTab)));
-const h=location.hash.match(/^#([ab])-(top3|top20)$/);applyView(h?h[1].toUpperCase()+':'+h[2]:'A:top3');`;
+const h=location.hash.match(/^#(a)-(top3|top20)$/);applyView(h?h[1].toUpperCase()+':'+h[2]:'A:top3');`;
   document.body.appendChild(tabJs);
   document.title = 'Nasdaq-100 Momentum · Static Report';
   const cap = (document.getElementById('last-updated')?.innerText || '').replace(/\s+/g, ' ').trim();

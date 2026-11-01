@@ -166,12 +166,9 @@ Writes `outputs/grid_search/grid_results.csv` and four heatmaps + an IS-vs-OOS s
 
 ## Live dashboard
 
-A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page with **four tabs** — each strategy's held top 3 and its full top-20 ranking:
+A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page for **Strategy A** — Nasdaq-100, `L=6m / P=1m` (the project default / baseline), benchmarked vs QQQ — with **two tabs**: the held top 3 and the full top-20 ranking. (An S&P 500 variant, Strategy B, was removed on 2026-11-01; `data/sp500_constituents.csv` stays only as a GICS sector-label fallback for former Nasdaq-100 members.)
 
-- **Strategy A** — Nasdaq-100, `L=6m / P=1m` (the project default / baseline), benchmarked vs QQQ.
-- **Strategy B** — S&P 500 with point-in-time membership, same rules, skipping whatever Strategy A holds that month; benchmarked vs SPY. Run `python scripts/build_sp500.py` to rebuild its universe (`data/sp500_constituents.csv`, `data/sp500_membership.csv`) from Wikipedia's constituents list and change log.
-
-The **Top 3** tabs show:
+The **Top 3** tab shows:
 
 - **Current open holdings** — with MTD return and an "in progress" badge.
 - **Next month's planned picks** — entry-price estimate, momentum rank, and an MOC-order note so live trades line up with the backtest's first-trading-day fill assumption.
@@ -179,7 +176,7 @@ The **Top 3** tabs show:
 - **6-month daily candle chart** — an interactive candlestick panel (TradingView lightweight-charts) for the selected holding, with an entry marker and a ticker switcher across the current picks.
 - **Last 12 completed rebalances** — vertical feed with entry/exit prices and per-stock return.
 
-The **Top 20** tabs show the ranking at the current rebalance — momentum score, return since entry, 1-month return, distance from the 6-month high, sector (sector chips filter the table) and a trend tag — with the top 3 marked HELD; clicking a row charts it.
+The **Top 20** tab shows the ranking at the current rebalance (or the upcoming one once its signal is locked) — momentum score, return since entry, 1-month return, distance from the 6-month high, sector (sector chips filter the table) and a trend tag — with the top 3 marked HELD; clicking a row charts it.
 
 The webapp uses [point-in-time membership](#membership) (`use_historical_membership=True`) for both strategies (former members Yahoo no longer prices are still missing, so some survivorship bias remains — see [`summary.md`](summary.md)). Both strategies are fetched in a single `/api/dashboard` round-trip, and an in-process 5-minute cache (`CACHE_TTL_SECONDS` in [`webapp/server.py`](webapp/server.py)) keeps page refreshes near-instant. The candle chart panel pulls daily OHLCV bars per ticker from a separate `/api/ohlc?ticker=&months=` endpoint, which reuses the `data/raw_prices/*.csv` cache and fetches/merges any missing recent slice. The header **Refresh** button forces yfinance to re-download fresh prices and bypasses the cache.
 

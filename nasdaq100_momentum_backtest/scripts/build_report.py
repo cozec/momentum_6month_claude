@@ -35,7 +35,7 @@ def build_report(url: str, out_path: str) -> int:
         page.goto(url, wait_until="networkidle", timeout=600_000)
         html = page.evaluate(snapshot_js)
         browser.close()
-    if html.count("data:image/png") < 2:
+    if html.count("data:image/png") < 1:
         raise RuntimeError("snapshot is missing chart images")
     with open(out_path, "w") as f:
         f.write(html)

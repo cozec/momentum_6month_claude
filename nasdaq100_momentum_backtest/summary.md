@@ -235,6 +235,8 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
 
 ## Strategy B review — S&P 500 basket (2026-10-11)
 
+> **Removed 2026-11-01.** Strategy B (S&P 500, deduped against A) was dropped from the code, dashboard and report: it only matched SPY (CAGR 15.2% vs 15.0%) with a deeper drawdown. Kept below for the record.
+
 Strategy B runs Strategy A's rules (top 3 by 6-month momentum, equal weight, monthly) over the S&P 500, skipping the stocks Strategy A holds that month. Until this review it used **today's** S&P 500 list for the whole history: 209 of its 366 picks (57%) were made before the stock had even joined the index (CVNA 33 times, SMCI 15, MRNA 14, HOOD 9). It now uses point-in-time membership rebuilt from Wikipedia's constituents list plus its change log (`scripts/build_sp500.py` → `data/sp500_membership.csv`: 733 spans, 723 tickers since 2016, 615 with Yahoo prices) and is benchmarked against SPY instead of QQQ.
 
 Aug 2016 → Oct 1 2026, 122 monthly rebalances, gross of costs, ordered by final equity. All rows use the corrected Strategy A universe (next section) — B's exclusions depend on A's picks.

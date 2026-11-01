@@ -128,16 +128,11 @@ def _former_member_ends(
     }
 
 
-def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.DataFrame]:
+def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
     """Run the monthly momentum rotation backtest.
 
     Returns a dict with keys ``selections``, ``portfolio_returns``,
     ``equity``, and ``prices``.
-
-    ``exclude_by_date`` optionally maps a rebalance ``Timestamp`` to a set of
-    tickers to drop *before* selecting the top N on that date. This lets a
-    second strategy (e.g. the S&P 500 basket) avoid duplicating the picks a
-    first strategy (the Nasdaq-100 basket) already holds that month.
     """
     LOGGER.info("Starting backtest with config: %s", asdict(config))
 
@@ -216,8 +211,6 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
             score_method=config.score_method,
         )
 
-        if exclude_by_date:
-            scores = _apply_exclude(scores, exclude_by_date.get(entry_date))
         selected = select_top_n(scores, n=config.top_n)
         if not selected:
             LOGGER.warning("No eligible names on %s; staying in cash", entry_date.date())
@@ -323,10 +316,7 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
     leaderboard_entry = None
     if len(rebalance_days) >= 1:
         open_entry = rebalance_days[-1]
-        open_exclude = exclude_by_date.get(open_entry) if exclude_by_date else None
-        open_position = compute_open_position(
-            prices, monthly_returns, config, open_entry, exclude=open_exclude
-        )
+        open_position = compute_open_position(prices, monthly_returns, config, open_entry)
         if not open_position.empty:
             LOGGER.info(
                 "Open position (entry %s, MTD as of %s): %s",
@@ -338,9 +328,7 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
         # passed, we can already score the *upcoming* entry — that's the
         # "Next picks" preview the dashboard shows on Friday evening
         # before the new month begins.
-        next_position = compute_next_position(
-            prices, monthly_returns, config, open_entry, exclude_by_date=exclude_by_date
-        )
+        next_position = compute_next_position(prices, monthly_returns, config, open_entry)
         if not next_position.empty:
             LOGGER.info(
                 "Next position (planned entry %s): %s",
@@ -355,13 +343,8 @@ def run_backtest(config: BacktestConfig, exclude_by_date=None) -> Dict[str, pd.D
         else:
             board_entry = open_entry
             prev_entry = rebalance_days[-2] if len(rebalance_days) >= 2 else None
-        board_exclude = exclude_by_date.get(board_entry) if exclude_by_date else None
-        prev_exclude = (
-            exclude_by_date.get(prev_entry) if exclude_by_date and prev_entry else None
-        )
         leaderboard = compute_leaderboard(
-            prices, monthly_returns, config, board_entry, exclude=board_exclude,
-            prev_entry_date=prev_entry, prev_exclude=prev_exclude,
+            prices, monthly_returns, config, board_entry, prev_entry_date=prev_entry,
         )
         leaderboard_entry = board_entry
 
@@ -394,29 +377,17 @@ def _predict_next_first_trading_day(
     return first_session_on_or_after(pd.Timestamp(target.year, target.month, 1))
 
 
-def _apply_exclude(scores: pd.Series, exclude) -> pd.Series:
-    """Drop ``exclude`` tickers from a score Series (used to dedupe one
-    strategy's picks against another's)."""
-    if exclude:
-        drop = [t for t in exclude if t in scores.index]
-        if drop:
-            scores = scores.drop(labels=drop)
-    return scores
-
-
 def _score_at(
     prices: pd.DataFrame,
     monthly_returns: pd.DataFrame,
     config: BacktestConfig,
     asof: pd.Timestamp,
-    exclude=None,
 ) -> Tuple[List[str], pd.Series]:
     """Score every eligible ticker at ``asof`` and return
     ``(selected_top_n_tickers, all_scores)``.
 
     Centralizes the boilerplate shared by :func:`compute_open_position`
-    and :func:`compute_next_position`. ``exclude`` drops tickers before
-    selection so this strategy's picks don't duplicate another's.
+    and :func:`compute_next_position`.
     """
     benchmark = config.benchmark.upper()
     secondary = (config.secondary_benchmark or "").upper()
@@ -434,7 +405,6 @@ def _score_at(
         lookback_months=config.lookback_months,
         score_method=config.score_method,
     )
-    scores = _apply_exclude(scores, exclude)
     selected = select_top_n(scores, n=config.top_n)
     return selected, scores
 
@@ -456,7 +426,6 @@ def compute_next_position(
     monthly_returns: pd.DataFrame,
     config: BacktestConfig,
     current_open_entry,
-    exclude_by_date=None,
 ) -> pd.DataFrame:
     """Score the *upcoming* rebalance, if the signal is already locked.
 
@@ -485,10 +454,7 @@ def compute_next_position(
     if not _signal_locked_for_next_entry(prices, next_entry):
         return pd.DataFrame()
 
-    exclude = exclude_by_date.get(next_entry) if exclude_by_date else None
-    selected, scores = _score_at(
-        prices, monthly_returns, config, next_entry, exclude=exclude
-    )
+    selected, scores = _score_at(prices, monthly_returns, config, next_entry)
     if not selected:
         return pd.DataFrame()
 
@@ -519,7 +485,6 @@ def compute_open_position(
     monthly_returns: pd.DataFrame,
     config: BacktestConfig,
     entry_date,
-    exclude=None,
 ) -> pd.DataFrame:
     """Score and price an open (still-held) rebalance at ``entry_date``.
 
@@ -534,9 +499,7 @@ def compute_open_position(
     plus a boolean ``is_open`` flag.
     """
     entry_date = to_business_date(entry_date)
-    selected, scores = _score_at(
-        prices, monthly_returns, config, entry_date, exclude=exclude
-    )
+    selected, scores = _score_at(prices, monthly_returns, config, entry_date)
     if not selected:
         return pd.DataFrame()
 
@@ -569,9 +532,7 @@ def compute_leaderboard(
     config: BacktestConfig,
     entry_date,
     n: int = 20,
-    exclude=None,
     prev_entry_date=None,
-    prev_exclude=None,
 ) -> pd.DataFrame:
     """Rank the top ``n`` names scored at the rebalance on ``entry_date``.
 
@@ -589,15 +550,13 @@ def compute_leaderboard(
     is mostly last month's return, which tends to reverse.
     """
     entry_date = to_business_date(entry_date)
-    _, scores = _score_at(prices, monthly_returns, config, entry_date, exclude=exclude)
+    _, scores = _score_at(prices, monthly_returns, config, entry_date)
     if scores.empty:
         return pd.DataFrame()
     top = scores.head(n)
     prev = pd.Series(dtype=float)
     if prev_entry_date is not None:
-        _, prev = _score_at(
-            prices, monthly_returns, config, to_business_date(prev_entry_date), exclude=prev_exclude
-        )
+        _, prev = _score_at(prices, monthly_returns, config, to_business_date(prev_entry_date))
     prev_rank = pd.Series(np.arange(1, len(prev) + 1), index=prev.index, dtype=float)
     ranks = np.arange(1, len(top) + 1)
     recent = prices[top.index].ffill()

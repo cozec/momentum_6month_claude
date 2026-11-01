@@ -1,9 +1,6 @@
 /* Nasdaq-100 Momentum picks — frontend.
- * Renders TWO strategies side-by-side on the page:
- *   A: L=6m / P=1m  (baseline)
- *   B: L=3m / P=2m  (grid-search winner)
- * Both call /api/picks with the appropriate query params. Refresh button
- * adds ?refresh=1 to both calls so the backend re-downloads fresh data.
+ * Renders Strategy A (Nasdaq-100, L=6m / P=1m) from /api/dashboard. The
+ * Refresh button adds ?refresh=1 so the backend re-downloads fresh data.
  */
 
 const ACCENT_PALETTE = [
@@ -624,7 +621,7 @@ async function load({ refresh = false } = {}) {
   }
 }
 
-// View tabs: "A:top3" | "A:top20" | "B:top3" | "B:top20". Sections declare
+// View tabs: "A:top3" | "A:top20". Sections declare
 // the views they belong to via data-view; the choice is kept in the URL hash.
 const TAB_ON = 'bg-slate-900 text-white border-slate-900';
 const TAB_OFF = 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100';
@@ -649,7 +646,7 @@ function applyView(view) {
 }
 
 function viewFromHash() {
-  const m = location.hash.match(/^#([ab])-(top3|top20)$/);
+  const m = location.hash.match(/^#(a)-(top3|top20)$/);
   return m ? `${m[1].toUpperCase()}:${m[2]}` : 'A:top3';
 }
 
