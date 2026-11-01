@@ -1,21 +1,78 @@
-name: Monthly picks email
+name: Month-end report and picks email
 
 # Runs every evening from the 26th to the 31st at 22:30 UTC (6:30 pm EDT /
-# 5:30 pm EST, after the US close settles). send_picks_email.py only sends
-# on the month's last NYSE trading day — the close that locks next month's
-# picks — so the trades arrive in time for market-on-close orders on the
-# first trading day. Cron can't express "last trading day", hence the
-# daily window plus the in-script check. The manual trigger always sends
-# (FORCE_SEND) for smoke tests.
+# 5:30 pm EST, after the US close settles) and does real work only on the
+# month's last NYSE trading day — the close that locks next month's picks.
+# Cron can't express "last trading day", hence the daily window plus the
+# calendar check. Everything runs on the runner (no hosted backend):
+#   1. start the dashboard locally and refresh prices,
+#   2. snapshot it into report.html, commit, and deploy GitHub Pages,
+#   3. email the trades with a link to the report.
+# The manual trigger always runs (FORCE_SEND) for smoke tests.
 on:
   schedule:
     - cron: "30 22 26-31 * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: month-end
+  cancel-in-progress: false
+
+env:
+  REPORT_URL: https://cozec.github.io/momentum_6month_claude/report.html
+
 jobs:
-  send-email:
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    defaults:
+      run:
+        working-directory: nasdaq100_momentum_backtest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: nasdaq100_momentum_backtest/src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pandas
+      - name: Last NYSE trading day of the month?
+        id: gate
+        run: |
+          python - <<'EOF'
+          import os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          import pandas as pd
+          from src.nyse_calendar import first_session_on_or_after, last_session_before
+
+          today = pd.Timestamp(datetime.now(ZoneInfo("America/New_York")).date())
+          next_entry = first_session_on_or_after(today + pd.offsets.MonthBegin(1))
+          last = last_session_before(next_entry)
+          run = today == last or "${{ github.event_name }}" == "workflow_dispatch"
+          print(f"today={today.date()} last session={last.date()} run={run}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"run={'true' if run else 'false'}\n")
+          EOF
+
+  month-end:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: nasdaq100_momentum_backtest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,19 +81,52 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: nasdaq100_momentum_backtest/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Start dashboard and refresh prices
+            run: |
+          nohup python run_webapp.py > webapp.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8765/health && break; sleep 2; done
+          curl -sf --max-time 2400 "http://127.0.0.1:8765/api/dashboard?refresh=true" > /dev/null
+          tail -5 webapp.log
+
+      - name: Build report.html
+            run: python scripts/build_report.py ../report.html
+
+      - name: Commit report
+            working-directory: .
+        run: |
+          git config user.name "Adam Wang"
+          git config user.email "yadongwang@gmail.com"
+          git add report.html
+          git diff --cached --quiet || git commit -m "Month-end report snapshot $(TZ=America/New_York date +%F)"
+          git push
+
+      - name: Stage site
+            working-directory: .
+        run: |
+          mkdir _site
+          cp index.html report.html rebalance_example.html _site/
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+    
+      - id: deployment
+            uses: actions/deploy-pages@v4
 
       - name: Send picks email
-        working-directory: nasdaq100_momentum_backtest
-        env:
+            env:
           RESEND_API_KEY:    ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM:        ${{ secrets.EMAIL_FROM }}
           EMAIL_TO:          ${{ secrets.EMAIL_TO }}
-          MOMENTUM_API_BASE: ${{ secrets.MOMENTUM_API_BASE }}
-          REFRESH:           "1"
+          MOMENTUM_API_BASE: http://127.0.0.1:8765
           FORCE_SEND:        ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
-          # Render Free plan sleeps after 15 min idle. First request
-          # takes ~30 s wake + the price refresh → keep the timeout
-          # generous so the wake doesn't trip exit 1.
-          HTTP_TIMEOUT:      "240"
           PYTHONUNBUFFERED:  "1"
         run: python send_picks_email.py

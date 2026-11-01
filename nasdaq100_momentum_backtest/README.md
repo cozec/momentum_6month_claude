@@ -211,23 +211,22 @@ Render's Free plan doesn't include cron jobs, which is why the schedule lives in
 - Render dashboard → **New → Blueprint** → connect this repo.
 - Render reads [`render.yaml`](../render.yaml) and creates the `momentum-web` service on the Free plan. Note the public URL it gives you (e.g. `https://momentum-web-xyz.onrender.com`).
 
-**2. Set up the monthly email cron in GitHub:**
-- In your fork's GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**, add four secrets:
+**2. Set up the month-end report + email in GitHub:**
+- In your fork's GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**, add three secrets:
   - `RESEND_API_KEY` — from [resend.com/api-keys](https://resend.com/api-keys)
   - `EMAIL_FROM` — Resend-verified sender (e.g. `picks@yourdomain.com`; for testing you can use `onboarding@resend.dev`)
   - `EMAIL_TO` — recipient(s), comma-separated
-  - `MOMENTUM_API_BASE` — the Render URL from step 1
-- The workflow at [`.github/workflows/monthly-picks-email.yml`](../.github/workflows/monthly-picks-email.yml) runs at **22:30 UTC on the 26th–31st of each month** and sends only on the evening of the month's **last NYSE trading day** — the close that locks next month's picks — so the trades arrive in time for market-on-close orders on the first trading day.
+- **Settings → Pages → Source: GitHub Actions.**
+- The workflow at [`.github/workflows/monthly-picks-email.yml`](../.github/workflows/monthly-picks-email.yml) runs at **22:30 UTC on the 26th–31st of each month**; a light `gate` job lets it continue only on the month's **last NYSE trading day** — the close that locks next month's picks. It then runs everything on the runner (no Render needed): starts the dashboard, refreshes prices, snapshots it into `report.html` with [`scripts/build_report.py`](scripts/build_report.py) (headless Chromium), commits the report, deploys GitHub Pages, and emails the trades with a link to the report (`REPORT_URL`).
 
 **3. Smoke-test:**
-- GitHub → **Actions → Monthly picks email → Run workflow** (a manual run always sends) → check that you receive the email within ~1 minute (longer if the Render web service is asleep — `send_picks_email.py` pre-warms via `/health` and retries 502s, so wake-ups are absorbed).
+- GitHub → **Actions → Month-end report and picks email → Run workflow** (a manual run always rebuilds, deploys and sends) → the email arrives in ~5–10 minutes.
 
 The email lists each strategy's trades (sell / buy / keep), next picks with the last close, and current holdings with month-to-date return — the same data the dashboard surfaces.
 
 **Gotchas the script already handles (so you don't have to):**
 
 - **Trailing whitespace in copy-pasted secrets** — env vars are stripped before use; `urllib`'s `Invalid header value` won't fire.
-- **Render Free-plan cold-start 502s** — `/health` is hit up to 8× with 10s backoff to warm the worker, and `/api/picks` retries on 502/503/504 with linear backoff.
 - **Cloudflare blocking `Python-urllib/*`** — Resend sits behind Cloudflare; the script sends a non-default `User-Agent` so the POST isn't rejected with `error code: 1010`.
 
 ## Caveats

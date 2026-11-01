@@ -20,6 +20,7 @@ Env vars:
   MOMENTUM_API_BASE optional — defaults to http://127.0.0.1:8765
   REFRESH           optional — "1" forces the backend to re-download prices
   FORCE_SEND        optional — "1" sends even when the signal isn't locked today
+  REPORT_URL        optional — link to the published static report
 
 Exit codes:
   0  email sent, or nothing to send today
@@ -57,6 +58,7 @@ EMAIL_TO = _env("EMAIL_TO")
 FORCE_REFRESH = _env("REFRESH", "0") == "1"
 FORCE_SEND = _env("FORCE_SEND", "0") == "1"
 HTTP_TIMEOUT = int(_env("HTTP_TIMEOUT", "120"))
+REPORT_URL = _env("REPORT_URL")
 
 
 def _http_get(url: str) -> bytes:
@@ -282,13 +284,16 @@ def build_email(bundle: Dict[str, Any]) -> Dict[str, str]:
     subject = f"Momentum trades for {entry or 'next rebalance'} — {summary}"
 
     blocks = "\n".join(_strategy_block(d) for d in strategies)
+    link = REPORT_URL or API_BASE
+    link_html = (f'<br>Full report: <a href="{link}" style="font-weight:600">{link}</a>'
+                 if REPORT_URL else f'Dashboard: <a href="{link}">{link}</a>')
     html = f"""<!doctype html>
 <html><body style="font-family:'Inter',system-ui,sans-serif;background:#F8FAFC;color:#0F172A;margin:0;padding:24px">
 <div style="max-width:680px;margin:0 auto;background:white;border:1px solid #E2E8F0;border-radius:12px;padding:24px">
   <div style="font-size:22px;font-weight:800;margin-bottom:4px">Momentum rotation · next month's trades</div>
   <div style="font-size:13px;color:#475569;margin-bottom:24px">
     Place <b>market-on-close</b> orders on <b>{entry or '—'}</b> (the first trading day) to match the backtest's fill.
-    Dashboard: <a href="{API_BASE}">{API_BASE}</a>
+    {link_html}
   </div>
   {blocks}
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E2E8F0;font-size:11px;color:#94A3B8">
@@ -307,7 +312,7 @@ def build_email(bundle: Dict[str, Any]) -> Dict[str, str]:
         mtd = (d.get("open_meta") or {}).get("mtd_portfolio_return")
         lines.append(f"  current holdings month to date: {_fmt_pct(mtd)}")
         lines.append("")
-    lines.append(API_BASE)
+    lines.append(f"Full report: {link}" if REPORT_URL else link)
     return {"subject": subject, "html": html, "text": "\n".join(lines)}
 
 
