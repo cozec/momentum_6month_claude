@@ -29,7 +29,8 @@ def build_report(url: str, out_path: str) -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(
-            viewport={"width": 1440, "height": 1000}, device_scale_factor=2
+            viewport={"width": 1440, "height": 1000}, device_scale_factor=2,
+            timezone_id="America/New_York",
         )
         page.goto(url, wait_until="networkidle", timeout=600_000)
         html = page.evaluate(snapshot_js)
