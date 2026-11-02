@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Titan-12 Momentum Picks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } },
+    };
+  </script>
+  <style>
+    html, body { font-family: 'Inter', system-ui, sans-serif; }
+    .accent-stripe { height: 6px; border-radius: 4px 4px 0 0; }
+    .card { transition: transform .15s ease, box-shadow .15s ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -10px rgba(20, 83, 45, .22); }
+    .skeleton {
+      background: linear-gradient(90deg, #f4f1ea 0%, #e8dfd1 50%, #f4f1ea 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s linear infinite;
+    }
+    @keyframes shimmer { from {background-position:200% 0} to {background-position:-200% 0} }
+  </style>
+</head>
+<body class="bg-stone-100 text-zinc-950 min-h-screen">
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <header class="flex items-center justify-between flex-wrap gap-3 mb-8">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Titan-12 <span id="universe-title">S&amp;P 500</span> Momentum Rotation</h1>
+        <p class="text-sm text-zinc-600 mt-1">Top-3 equal-weight monthly rotation · 12-step weighted momentum · benchmarked vs <span id="benchmark-label">SPY</span></p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="last-updated" class="text-xs text-zinc-600 text-right leading-tight"><div>loading…</div></div>
+        <button id="refresh-btn" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-700 text-white font-medium text-sm hover:bg-teal-800 transition">
+          <svg class="w-4 h-4" id="refresh-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span id="refresh-label">Refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <div id="error" class="hidden mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800"></div>
+
+    <nav class="mb-6 flex gap-2 border-b border-stone-300" role="tablist" aria-label="View">
+      <button type="button" role="tab" data-view-tab="top3" class="view-tab px-4 py-2 -mb-px text-sm font-semibold border-b-2">Top 3</button>
+      <button type="button" role="tab" data-view-tab="top20" class="view-tab px-4 py-2 -mb-px text-sm font-semibold border-b-2">Top 20</button>
+    </nav>
+
+    <div id="view-top20" class="hidden">
+      <section class="mb-8">
+        <div class="flex items-center gap-3 mb-3 flex-wrap">
+          <div class="w-2 h-2 rounded-full bg-zinc-600"></div>
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Titan-12 Top 20</h2>
+          <span id="top20-label" class="text-xs text-zinc-500"></span>
+        </div>
+        <p class="mb-3 text-xs text-zinc-600">Plain S&amp;P 500 Titan-12 ranking. No Nasdaq-overlap exclusion; the held tag marks the baseline top 3.</p>
+        <div class="rounded-xl bg-white border border-stone-300 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-stone-100 text-[11px] uppercase tracking-wider text-zinc-600">
+              <tr>
+                <th class="px-3 py-2 text-right font-semibold">#</th>
+                <th class="px-3 py-2 text-left font-semibold">Ticker</th>
+                <th class="hidden sm:table-cell px-3 py-2 text-left font-semibold">Sector</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Titan-12 weighted momentum score, the ranking variable">Score</th>
+                <th class="px-3 py-2 text-left font-semibold" title="Rank change since the previous rebalance">vs last</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Return over the last 21 trading days">1M</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Latest close vs the highest close of the last 126 trading days">Off 6M high</th>
+                <th class="hidden sm:table-cell px-3 py-2 text-right font-semibold">Last close</th>
+              </tr>
+            </thead>
+            <tbody id="top20-body" class="divide-y divide-stone-200"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div id="view-top3">
+    <section id="next-section" class="mb-8 hidden">
+      <div class="flex items-center gap-3 mb-3 flex-wrap">
+        <div class="w-2 h-2 rounded-full bg-indigo-600"></div>
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Next Rebalance Basket</h2>
+        <span id="next-date" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-700 text-white"></span>
+      </div>
+      <p id="next-note" class="mb-3 text-xs text-zinc-600"></p>
+      <div id="next-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+    </section>
+
+    <section class="mb-8">
+      <div class="flex items-center gap-3 mb-3 flex-wrap">
+        <div class="w-2 h-2 rounded-full bg-amber-600"></div>
+        <h2 id="basket-heading" class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Nasdaq-Overlap-Excluded Current Basket</h2>
+        <span id="rebalance-date" class="hidden text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-700 text-white"></span>
+      </div>
+      <p id="overlay-note" class="mb-3 text-xs text-zinc-600"></p>
+      <div id="overlay-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+    </section>
+
+    <section class="mb-8">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Past <span id="history-count">12</span> Rebalances · <span id="history-mode">Nasdaq-Overlap-Excluded</span></h2>
+        <div id="window-cum" class="text-xs text-zinc-600"></div>
+      </div>
+      <div id="history-list" class="flex flex-col gap-2"></div>
+    </section>
+    </div>
+
+    <section class="mt-4 mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3" id="stats-grid">
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+    </section>
+
+    <section id="bias-warning" class="mb-6 rounded-xl border border-amber-300 bg-amber-100 px-4 py-3 text-sm text-amber-950">
+      Approximate historical S&amp;P 500 membership from Wikipedia selected changes. Results still depend on Yahoo Finance data availability for removed tickers.
+    </section>
+
+    <footer class="mt-12 pt-6 border-t border-stone-300 text-xs text-zinc-500">
+      Data: Yahoo Finance adjusted close. See <code id="summary-file">summary.md</code> for caveats.
+    </footer>
+  </div>
+  <script src="/app.js?v=top20"></script>
+</body>
+</html>

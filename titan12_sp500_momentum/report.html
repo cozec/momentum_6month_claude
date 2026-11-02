@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Titan-12 Momentum Picks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } },
+    };
+  </script>
+  <style>
+    html, body { font-family: 'Inter', system-ui, sans-serif; }
+    .accent-stripe { height: 6px; border-radius: 4px 4px 0 0; }
+    .card { transition: transform .15s ease, box-shadow .15s ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -10px rgba(20, 83, 45, .22); }
+    .skeleton {
+      background: linear-gradient(90deg, #f4f1ea 0%, #e8dfd1 50%, #f4f1ea 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s linear infinite;
+    }
+    @keyframes shimmer { from {background-position:200% 0} to {background-position:-200% 0} }
+  </style>
+</head>
+<body class="bg-stone-100 text-zinc-950 min-h-screen">
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <header class="flex items-center justify-between flex-wrap gap-3 mb-8">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Titan-12 <span id="universe-title">S&amp;P 500</span> Momentum Rotation</h1>
+        <p class="text-sm text-zinc-600 mt-1">Top-3 equal-weight monthly rotation · 12-step weighted momentum · benchmarked vs <span id="benchmark-label">SPY</span></p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="last-updated" class="text-xs text-zinc-600 text-right leading-tight"><div>loading…</div></div>
+        <button id="refresh-btn" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-700 text-white font-medium text-sm hover:bg-teal-800 transition">
+          <svg class="w-4 h-4" id="refresh-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span id="refresh-label">Refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <div id="error" class="hidden mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800"></div>
+
+    <nav class="mb-6 flex gap-2 border-b border-stone-300" role="tablist" aria-label="View">
+      <button type="button" role="tab" data-view-tab="top3" class="view-tab px-4 py-2 -mb-px text-sm font-semibold border-b-2">Top 3</button>
+      <button type="button" role="tab" data-view-tab="top20" class="view-tab px-4 py-2 -mb-px text-sm font-semibold border-b-2">Top 20</button>
+    </nav>
+
+    <div id="view-top20" class="hidden">
+      <section class="mb-8">
+        <div class="flex items-center gap-3 mb-3 flex-wrap">
+          <div class="w-2 h-2 rounded-full bg-zinc-600"></div>
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Titan-12 Top 20</h2>
+          <span id="top20-label" class="text-xs text-zinc-500"></span>
+        </div>
+        <p class="mb-3 text-xs text-zinc-600">Plain S&amp;P 500 Titan-12 ranking. No Nasdaq-overlap exclusion; the held tag marks the baseline top 3.</p>
+        <div class="rounded-xl bg-white border border-stone-300 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-stone-100 text-[11px] uppercase tracking-wider text-zinc-600">
+              <tr>
+                <th class="px-3 py-2 text-right font-semibold">#</th>
+                <th class="px-3 py-2 text-left font-semibold">Ticker</th>
+                <th class="hidden sm:table-cell px-3 py-2 text-left font-semibold">Sector</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Titan-12 weighted momentum score, the ranking variable">Score</th>
+                <th class="px-3 py-2 text-left font-semibold" title="Rank change since the previous rebalance">vs last</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Return over the last 21 trading days">1M</th>
+                <th class="px-3 py-2 text-right font-semibold" title="Latest close vs the highest close of the last 126 trading days">Off 6M high</th>
+                <th class="hidden sm:table-cell px-3 py-2 text-right font-semibold">Last close</th>
+              </tr>
+            </thead>
+            <tbody id="top20-body" class="divide-y divide-stone-200"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div id="view-top3">
+    <section id="next-section" class="mb-8 hidden">
+      <div class="flex items-center gap-3 mb-3 flex-wrap">
+        <div class="w-2 h-2 rounded-full bg-indigo-600"></div>
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Next Rebalance Basket</h2>
+        <span id="next-date" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-700 text-white"></span>
+      </div>
+      <p id="next-note" class="mb-3 text-xs text-zinc-600"></p>
+      <div id="next-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+    </section>
+
+    <section class="mb-8">
+      <div class="flex items-center gap-3 mb-3 flex-wrap">
+        <div class="w-2 h-2 rounded-full bg-amber-600"></div>
+        <h2 id="basket-heading" class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Nasdaq-Overlap-Excluded Current Basket</h2>
+        <span id="rebalance-date" class="hidden text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-700 text-white"></span>
+      </div>
+      <p id="overlay-note" class="mb-3 text-xs text-zinc-600"></p>
+      <div id="overlay-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+    </section>
+
+    <section class="mb-8">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-600">Past <span id="history-count">12</span> Rebalances · <span id="history-mode">Nasdaq-Overlap-Excluded</span></h2>
+        <div id="window-cum" class="text-xs text-zinc-600"></div>
+      </div>
+      <div id="history-list" class="flex flex-col gap-2"></div>
+    </section>
+    </div>
+
+    <section class="mt-4 mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3" id="stats-grid">
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+      <div class="rounded-xl bg-white border border-stone-300 p-4 skeleton h-20"></div>
+    </section>
+
+    <section id="bias-warning" class="mb-6 rounded-xl border border-amber-300 bg-amber-100 px-4 py-3 text-sm text-amber-950">
+      Approximate historical S&amp;P 500 membership from Wikipedia selected changes. Results still depend on Yahoo Finance data availability for removed tickers.
+    </section>
+
+    <footer class="mt-12 pt-6 border-t border-stone-300 text-xs text-zinc-500">
+      Data: Yahoo Finance adjusted close. See <code id="summary-file">summary.md</code> for caveats.
+    </footer>
+  </div>
+  <script>window.DASHBOARD_DATA = {"bias_warning": "Approximate historical S&P 500 membership from Wikipedia selected changes. Results still depend on Yahoo Finance data availability for removed tickers.", "charts": {"drawdown": "/charts/sp500/drawdown_curve.png", "equity_curve": "/charts/sp500/equity_curve_vs_spy.png", "recent_rebalances": "/charts/sp500/recent_rebalances.png"}, "computed_at": "2026-11-01T14:25:12", "data_freshness": "2026-10-30", "nasdaq_overlay": {"adjusted": [{"as_of": "2026-10-30", "date": "2026-10-01", "rank": 1, "score": 26.47335553489785, "sector": "Health Care", "stock_return": 0.17349422227017564, "ticker": "MRNA"}, {"as_of": "2026-10-30", "date": "2026-10-01", "rank": 3, "score": 14.618644944474605, "sector": "Information Technology", "stock_return": -0.21678296702925293, "ticker": "DELL"}, {"as_of": "2026-10-30", "date": "2026-10-01", "rank": 6, "score": 12.419072543296231, "sector": "Information Technology", "stock_return": -0.26722277850358755, "ticker": "MRVL"}], "excluded": ["MU", "INTC", "SNDK"]}, "next": {"as_of": "2026-10-30", "date": "2026-11-02", "excluded": ["CRWD", "MU", "PANW"], "picks": [{"entry_price_estimate": 221.72000122070312, "rank": 1, "score": 25.35789567026387, "sector": "Health Care", "ticker": "MRNA"}, {"entry_price_estimate": 1150.8900146484375, "rank": 2, "score": 11.705294766011605, "sector": "Information Technology", "ticker": "SNDK"}, {"entry_price_estimate": 424.2999877929687, "rank": 3, "score": 10.29192874535386, "sector": "Information Technology", "ticker": "DELL"}]}, "open": {"as_of": "2026-10-30", "date": "2026-10-01", "picks": [{"as_of": "2026-10-30", "date": "2026-10-01", "entry_price": 188.94000244140625, "latest_price": 221.72000122070312, "rank": 1, "score": 26.47335553489785, "stock_return": 0.1734942222701756, "ticker": "MRNA"}, {"as_of": "2026-10-30", "date": "2026-10-01", "entry_price": 1787.68994140625, "latest_price": 1150.8900146484375, "rank": 2, "score": 19.80515749002921, "stock_return": -0.3562138556627369, "ticker": "SNDK"}, {"as_of": "2026-10-30", "date": "2026-10-01", "entry_price": 541.739990234375, "latest_price": 424.2999877929687, "rank": 3, "score": 14.618644944474603, "stock_return": -0.2167829670292528, "ticker": "DELL"}], "portfolio_return": -0.13316753347393803}, "recent": [{"date": "2025-10-01", "excluded": ["APP", "PLTR", "WBD"], "label": "Oct 2025", "picks": [{"rank": 1, "score": 14.961285456794752, "sector": "Financials", "stock_return": 0.057064844589879815, "ticker": "HOOD"}, {"rank": 3, "score": 11.609443959894476, "sector": "Information Technology", "stock_return": 0.21004683807577007, "ticker": "WDC"}, {"rank": 4, "score": 10.825874422128592, "sector": "Information Technology", "stock_return": 0.03391205998649194, "ticker": "STX"}], "portfolio_return": 0.10034124755071394}, {"date": "2025-11-03", "excluded": ["MU", "AMD", "WBD"], "label": "Nov 2025", "picks": [{"rank": 1, "score": 13.568947559228409, "sector": "Information Technology", "stock_return": 0.03493218106526097, "ticker": "WDC"}, {"rank": 2, "score": 13.051153436807274, "sector": "Financials", "stock_return": -0.16208868418882194, "ticker": "HOOD"}, {"rank": 4, "score": 10.868866391081195, "sector": "Information Technology", "stock_return": 0.017134280317107953, "ticker": "STX"}], "portfolio_return": -0.03667407426881767}, {"date": "2025-12-01", "excluded": ["MU", "WBD", "AMD"], "label": "Dec 2025", "picks": [{"rank": 1, "score": 13.26832415536898, "sector": "Information Technology", "stock_return": 0.1486542231724488, "ticker": "WDC"}, {"rank": 3, "score": 10.71265196300548, "sector": "Information Technology", "stock_return": 0.06736165743091016, "ticker": "STX"}, {"rank": 5, "score": 9.321849887179898, "sector": "Financials", "stock_return": -0.06515740764758282, "ticker": "HOOD"}], "portfolio_return": 0.05028615765192538}, {"date": "2026-01-02", "excluded": ["WDC", "WBD", "MU"], "label": "Jan 2026", "picks": [{"rank": 4, "score": 9.483703151913346, "sector": "Information Technology", "stock_return": 0.5057035775214838, "ticker": "STX"}, {"rank": 5, "score": 8.428843191900397, "sector": "Materials", "stock_return": 0.14590430258623854, "ticker": "ALB"}, {"rank": 6, "score": 7.879795743440854, "sector": "Communication Services", "stock_return": -0.21885108959973076, "ticker": "APP"}], "portfolio_return": 0.14425226350266385}, {"date": "2026-02-02", "excluded": ["MU", "WDC", "STX"], "label": "Feb 2026", "picks": [{"rank": 4, "score": 11.254934293089805, "sector": "Information Technology", "stock_return": -0.027368450219395934, "ticker": "LRCX"}, {"rank": 5, "score": 10.25516624903924, "sector": "Materials", "stock_return": 0.080337055904244, "ticker": "ALB"}, {"rank": 6, "score": 9.958362793258328, "sector": "Unknown", "stock_return": 0.035610447890085606, "ticker": "WBD"}], "portfolio_return": 0.029526351191644557}, {"date": "2026-03-02", "excluded": ["WDC", "MU", "WBD"], "label": "Mar 2026", "picks": [{"rank": 1, "score": 34.5942916533591, "sector": "Information Technology", "stock_return": 0.11896679160331836, "ticker": "SNDK"}, {"rank": 3, "score": 15.274601321268324, "sector": "Information Technology", "stock_return": 0.1743137470586078, "ticker": "CIEN"}, {"rank": 5, "score": 12.897723422861493, "sector": "Information Technology", "stock_return": -0.04183155760400459, "ticker": "TER"}], "portfolio_return": 0.08381632701930719}, {"date": "2026-04-01", "excluded": ["WDC", "MU", "STX"], "label": "Apr 2026", "picks": [{"rank": 1, "score": 30.728970538423063, "sector": "Information Technology", "stock_return": 0.7135103625756056, "ticker": "SNDK"}, {"rank": 2, "score": 21.474396728126987, "sector": "Information Technology", "stock_return": 0.24230688857127203, "ticker": "LITE"}, {"rank": 3, "score": 14.866594543329066, "sector": "Information Technology", "stock_return": 0.28864430812180886, "ticker": "CIEN"}], "portfolio_return": 0.41482051975622886}, {"date": "2026-05-01", "excluded": ["SNDK", "WDC", "INTC"], "label": "May 2026", "picks": [{"rank": 2, "score": 21.965848026624986, "sector": "Information Technology", "stock_return": -0.047298214628660795, "ticker": "LITE"}, {"rank": 5, "score": 17.051554570241503, "sector": "Information Technology", "stock_return": 0.06411479521939722, "ticker": "CIEN"}, {"rank": 6, "score": 16.960115675699733, "sector": "Information Technology", "stock_return": 0.2673297565876629, "ticker": "STX"}], "portfolio_return": 0.09471544572613311}, {"date": "2026-06-01", "excluded": ["SNDK", "MU", "INTC"], "label": "Jun 2026", "picks": [{"rank": 4, "score": 18.615824128175063, "sector": "Information Technology", "stock_return": 0.09580011129575916, "ticker": "WDC"}, {"rank": 5, "score": 18.214371891691663, "sector": "Information Technology", "stock_return": -0.08736797882465497, "ticker": "DELL"}, {"rank": 6, "score": 18.21232995422067, "sector": "Information Technology", "stock_return": -0.005880464635333538, "ticker": "STX"}], "portfolio_return": 0.0008505559452568848}, {"date": "2026-07-01", "excluded": ["SNDK", "MU", "INTC"], "label": "Jul 2026", "picks": [{"rank": 4, "score": 18.296923179208022, "sector": "Information Technology", "stock_return": -0.118906412172054, "ticker": "WDC"}, {"rank": 5, "score": 17.02260641697098, "sector": "Information Technology", "stock_return": -0.2875286687852425, "ticker": "MRVL"}, {"rank": 6, "score": 16.95312372542192, "sector": "Information Technology", "stock_return": -0.09192627407122578, "ticker": "STX"}], "portfolio_return": -0.1661204516761741}, {"date": "2026-08-03", "excluded": ["SNDK", "MRVL", "INTC"], "label": "Aug 2026", "picks": [{"rank": 2, "score": 16.60403222923808, "sector": "Information Technology", "stock_return": 0.12530440318433533, "ticker": "MU"}, {"rank": 3, "score": 14.30388283333333, "sector": "Information Technology", "stock_return": -0.00937016716380501, "ticker": "DELL"}, {"rank": 4, "score": 13.822771417570369, "sector": "Information Technology", "stock_return": -0.1456317745969984, "ticker": "WDC"}], "portfolio_return": -0.009899179525489354}, {"date": "2026-09-01", "excluded": ["SNDK", "MRVL", "MU"], "label": "Sep 2026", "picks": [{"rank": 1, "score": 24.63934654619724, "sector": "Health Care", "stock_return": 0.22473583463259383, "ticker": "MRNA"}, {"rank": 4, "score": 14.234845448154502, "sector": "Information Technology", "stock_return": 0.27468232996323527, "ticker": "DELL"}, {"rank": 5, "score": 11.50649505125724, "sector": "Information Technology", "stock_return": 0.20349849197966652, "ticker": "LITE"}], "portfolio_return": 0.23430555219183188}], "stats": {"average_turnover": 0.4281609195402299, "cagr": 0.2896842328293543, "final_value": 1169515.835900292, "max_drawdown": -0.3932724938882388, "sharpe": 0.8259150251704729, "spy_value": 390723.4332386791, "total_return": 10.69515835900292, "win_rate_vs_spy": 0.4741379310344827}, "top20": {"as_of": "2026-10-30", "rank_date": "2026-11-02", "rows": [{"company": "Moderna", "held": true, "latest_price": 221.72000122070312, "off_6m_high": -0.0980025083485397, "prev_rank": 1.0, "rank": 1, "rank_change": 0.0, "ret_1m": 0.1734942222701756, "score": 25.35789567026387, "sector": "Health Care", "ticker": "MRNA"}, {"company": "Sandisk", "held": true, "latest_price": 1150.8900146484375, "off_6m_high": -0.5071134840906049, "prev_rank": 2.0, "rank": 2, "rank_change": 0.0, "ret_1m": -0.3562138556627369, "score": 11.705294766011605, "sector": "Information Technology", "ticker": "SNDK"}, {"company": "Dell Technologies", "held": true, "latest_price": 424.2999877929687, "off_6m_high": -0.2788919609316926, "prev_rank": 3.0, "rank": 3, "rank_change": 0.0, "ret_1m": -0.2167829670292528, "score": 10.29192874535386, "sector": "Information Technology", "ticker": "DELL"}, {"company": "Micron Technology", "held": false, "latest_price": 884.739990234375, "off_6m_high": -0.2708427754451604, "prev_rank": 4.0, "rank": 4, "rank_change": 0.0, "ret_1m": -0.1937779837391609, "score": 9.999433341834155, "sector": "Information Technology", "ticker": "MU"}, {"company": "Marathon Petroleum", "held": false, "latest_price": 444.7300109863281, "off_6m_high": -0.0828796529912568, "prev_rank": 19.0, "rank": 5, "rank_change": 14.0, "ret_1m": 0.0585029571508211, "score": 8.089857102415614, "sector": "Energy", "ticker": "MPC"}, {"company": "CrowdStrike", "held": false, "latest_price": 250.42999267578125, "off_6m_high": -0.1019507787750156, "prev_rank": 12.0, "rank": 6, "rank_change": 6.0, "ret_1m": -0.0588522826022506, "score": 7.968986419913997, "sector": "Information Technology", "ticker": "CRWD"}, {"company": "Hewlett Packard Enterprise", "held": false, "latest_price": 55.09000015258789, "off_6m_high": -0.2500680528291438, "prev_rank": 9.0, "rank": 7, "rank_change": 2.0, "ret_1m": -0.146949541799228, "score": 7.79275741202844, "sector": "Information Technology", "ticker": "HPE"}, {"company": "Marvell Technology", "held": false, "latest_price": 196.3999938964844, "off_6m_high": -0.379036827250135, "prev_rank": 6.0, "rank": 8, "rank_change": -2.0, "ret_1m": -0.2672227785035876, "score": 7.775065601610471, "sector": "Information Technology", "ticker": "MRVL"}, {"company": "Advanced Micro Devices", "held": false, "latest_price": 504.7999877929687, "off_6m_high": -0.2226910149409352, "prev_rank": 7.0, "rank": 9, "rank_change": -2.0, "ret_1m": -0.1801601289437476, "score": 7.709843122458623, "sector": "Information Technology", "ticker": "AMD"}, {"company": "Charles River Laboratories", "held": false, "latest_price": 359.4100036621094, "off_6m_high": -0.0443765013840828, "prev_rank": 29.0, "rank": 10, "rank_change": 19.0, "ret_1m": 0.253041942919582, "score": 7.544009442718592, "sector": "Health Care", "ticker": "CRL"}, {"company": "APA Corporation", "held": false, "latest_price": 52.81999969482422, "off_6m_high": 0.0, "prev_rank": 39.0, "rank": 11, "rank_change": 28.0, "ret_1m": 0.2187355678094122, "score": 6.924024789090529, "sector": "Energy", "ticker": "APA"}, {"company": "Valero Energy", "held": false, "latest_price": 399.6600036621094, "off_6m_high": -0.1307581784262134, "prev_rank": 20.0, "rank": 12, "rank_change": 8.0, "ret_1m": -0.0215443078320108, "score": 6.849611490081419, "sector": "Energy", "ticker": "VLO"}, {"company": "Everpure", "held": false, "latest_price": 126.9800033569336, "off_6m_high": -0.1910556006278101, "prev_rank": 17.0, "rank": 13, "rank_change": 4.0, "ret_1m": -0.0533065031357135, "score": 6.778203261445387, "sector": "Information Technology", "ticker": "P"}, {"company": "Phillips 66", "held": false, "latest_price": 282.8299865722656, "off_6m_high": -0.0486394482055769, "prev_rank": 24.0, "rank": 14, "rank_change": 10.0, "ret_1m": 0.0703931227058833, "score": 6.648920191830653, "sector": "Energy", "ticker": "PSX"}, {"company": "Palo Alto Networks", "held": false, "latest_price": 365.8699951171875, "off_6m_high": -0.1286942632317149, "prev_rank": 14.0, "rank": 15, "rank_change": -1.0, "ret_1m": -0.0766687820386435, "score": 6.584792356259141, "sector": "Information Technology", "ticker": "PANW"}, {"company": "NetApp", "held": false, "latest_price": 199.17999267578125, "off_6m_high": -0.1672380685044242, "prev_rank": 18.0, "rank": 16, "rank_change": 2.0, "ret_1m": -0.0717076151997064, "score": 6.1694661439669805, "sector": "Information Technology", "ticker": "NTAP"}, {"company": "Humana", "held": false, "latest_price": 414.5, "off_6m_high": -0.0438292964244521, "prev_rank": 27.0, "rank": 17, "rank_change": 10.0, "ret_1m": 0.0917088284763858, "score": 6.15638940182909, "sector": "Health Care", "ticker": "HUM"}, {"company": "Lumentum", "held": false, "latest_price": 840.7000122070312, "off_6m_high": -0.2582495199418664, "prev_rank": 11.0, "rank": 18, "rank_change": -7.0, "ret_1m": -0.1961024415695987, "score": 5.970769417746442, "sector": "Information Technology", "ticker": "LITE"}, {"company": "Bloom Energy", "held": false, "latest_price": 203.1699981689453, "off_6m_high": -0.4125488084908839, "prev_rank": 8.0, "rank": 19, "rank_change": -11.0, "ret_1m": -0.2680668347966373, "score": 5.908642601412372, "sector": "Industrials", "ticker": "BE"}, {"company": "Illumina, Inc.", "held": false, "latest_price": 235.9900054931641, "off_6m_high": -0.1964656490469193, "prev_rank": 13.0, "rank": 20, "rank_change": -7.0, "ret_1m": -0.1118846740590135, "score": 5.82468444088089, "sector": "Health Care", "ticker": "ILMN"}]}, "universe": {"benchmark": "SPY", "excludes_sister": true, "id": "sp500", "label": "S&P 500"}, "window": {"first": "2025-10-01", "last": "2026-09-01", "mode": "Nasdaq-overlap-excluded", "months": 12, "spy_return": 0.15525818157117088, "strategy_return": 1.2454349376289588}};</script>
+  <script>
+const ACCENT_PALETTE = [
+  '#0F766E', '#B45309', '#BE123C', '#047857', '#A16207',
+  '#334155', '#0E7490', '#9F1239', '#15803D', '#92400E',
+  '#0F766E', '#B91C1C', '#166534', '#475569', '#CA8A04',
+  '#0F766E', '#854D0E', '#0E7490', '#365314', '#A21CAF',
+];
+
+function tickerColor(ticker) {
+  let h = 0;
+  for (let i = 0; i < ticker.length; i++) h = (h * 31 + ticker.charCodeAt(i)) >>> 0;
+  return ACCENT_PALETTE[h % ACCENT_PALETTE.length];
+}
+
+function fmtPct(x, digits = 1) {
+  if (x === null || x === undefined || Number.isNaN(x)) return '—';
+  const sign = x >= 0 ? '+' : '';
+  return `${sign}${(x * 100).toFixed(digits)}%`;
+}
+
+function fmtMoney(x) {
+  if (x === null || x === undefined || Number.isNaN(x)) return '—';
+  return `$${Math.round(x).toLocaleString()}`;
+}
+
+function fmtDay(s) {
+  if (!s) return '';
+  const d = new Date(s + 'T00:00');
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtMonth(s) {
+  if (!s) return '';
+  const d = new Date(s + 'T00:00');
+  return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
+
+function bgFromReturn(ret, maxAbs) {
+  if (ret === null || ret === undefined) return '#FFFFFF';
+  const intensity = Math.min(1, Math.pow(Math.abs(ret) / Math.max(maxAbs, 1e-9), 0.6));
+  const pos = [220, 245, 237];
+  const neg = [255, 228, 230];
+  const neutral = [250, 248, 244];
+  const target = ret >= 0 ? pos : neg;
+  const c = neutral.map((n, i) => Math.round(n + (target[i] - n) * intensity));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function pickCard(pick, opts = {}) {
+  const { isOpen = false, compact = false, maxAbs = 0.5, rankLabel = null } = opts;
+  const color = tickerColor(pick.ticker);
+  const bg = bgFromReturn(pick.stock_return, maxAbs);
+  const positive = (pick.stock_return ?? 0) >= 0;
+  const retColor = positive ? 'text-teal-700' : 'text-rose-700';
+  const border = isOpen ? 'border-2 border-dashed border-teal-700' : 'border border-stone-300';
+
+  if (compact) {
+    return `
+      <div class="card rounded-lg ${border} bg-white overflow-hidden flex items-stretch">
+        <div class="w-1" style="background:${color}"></div>
+        <div class="flex-1 flex items-center justify-between px-2.5 py-1.5" style="background:${bg}">
+          <div class="text-sm font-bold text-zinc-950 leading-tight">${pick.ticker}</div>
+          <div class="text-sm font-semibold ${retColor} leading-tight">${fmtPct(pick.stock_return)}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card rounded-xl ${border} bg-white overflow-hidden">
+      <div class="accent-stripe" style="background:${color}"></div>
+      <div class="p-5" style="background:${bg}">
+        <div class="flex items-center justify-between">
+          <div class="text-3xl font-bold text-zinc-950">${pick.ticker}</div>
+          <div class="text-[10px] text-zinc-600 font-medium">${rankLabel || `#${pick.rank}`}</div>
+        </div>
+        <div class="mt-1 text-lg font-semibold ${retColor}">${fmtPct(pick.stock_return)}</div>
+        <div class="mt-2 text-[10px] font-semibold tracking-wider px-1.5 py-0.5 rounded bg-stone-200 text-zinc-700 inline-block">MTD</div>
+      </div>
+    </div>
+  `;
+}
+
+const UNIVERSE_KEY = 'titan12.universe';
+const UNIVERSE_IDS = ['sp500'];
+
+function initialUniverse() {
+  const fromHash = window.location.hash.replace('#', '');
+  if (UNIVERSE_IDS.includes(fromHash)) return fromHash;
+  try {
+    const saved = localStorage.getItem(UNIVERSE_KEY);
+    if (UNIVERSE_IDS.includes(saved)) return saved;
+  } catch (e) { /* storage unavailable */ }
+  return 'sp500';
+}
+
+let activeUniverse = initialUniverse();
+
+function universeInfo(data) {
+  return data.universe || { id: 'sp500', label: 'S&P 500', benchmark: 'SPY', excludes_sister: true };
+}
+
+function renderTabs() {
+  document.querySelectorAll('.universe-tab').forEach(btn => {
+    const active = btn.dataset.universe === activeUniverse;
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.classList.toggle('border-teal-700', active);
+    btn.classList.toggle('text-teal-800', active);
+    btn.classList.toggle('border-transparent', !active);
+    btn.classList.toggle('text-zinc-500', !active);
+  });
+}
+
+function renderUniverse(data) {
+  const u = universeInfo(data);
+  document.getElementById('universe-title').textContent = u.label;
+  document.getElementById('benchmark-label').textContent = u.benchmark;
+  document.getElementById('bias-warning').textContent = data.bias_warning || '';
+  document.getElementById('basket-heading').textContent =
+    u.excludes_sister ? 'Nasdaq-Overlap-Excluded Current Basket' : 'Current Basket';
+  document.getElementById('history-mode').textContent =
+    u.excludes_sister ? 'Nasdaq-Overlap-Excluded' : 'Baseline';
+  document.getElementById('summary-file').textContent =
+    u.id === 'sp500' ? 'summary.md' : `summary_${u.id}.md`;
+}
+
+function renderStats(data) {
+  const stats = data.stats || {};
+  const bench = universeInfo(data).benchmark;
+  const card = (label, value, sub) => `
+    <div class="rounded-xl bg-white border border-stone-300 p-4">
+      <div class="text-xs font-medium text-zinc-600 uppercase tracking-wider">${label}</div>
+      <div class="text-2xl font-bold text-zinc-950 mt-1">${value}</div>
+      ${sub ? `<div class="text-xs text-zinc-600 mt-1">${sub}</div>` : ''}
+    </div>
+  `;
+  document.getElementById('stats-grid').innerHTML = [
+    card('CAGR', fmtPct(stats.cagr), `${bench} value ${fmtMoney(stats.spy_value)}`),
+    card('Final value', fmtMoney(stats.final_value), 'from $100,000 initial capital'),
+    card('Max drawdown', fmtPct(stats.max_drawdown), `Sharpe ${(stats.sharpe ?? 0).toFixed(2)}`),
+    card(`Win vs ${bench}`, fmtPct(stats.win_rate_vs_spy), `Turnover ${fmtPct(stats.average_turnover)}/mo`),
+  ].join('');
+}
+
+function renderOverlay(data) {
+  const overlay = data.nasdaq_overlay || {};
+  const excluded = overlay.excluded || [];
+  const adjusted = overlay.adjusted || [];
+  const maxAbs = Math.max(...adjusted.map(p => Math.abs(p.stock_return || 0)), 0.1);
+  const rebalanceDate = (data.open && data.open.date) || (adjusted[0] && adjusted[0].date);
+  const badge = document.getElementById('rebalance-date');
+  if (rebalanceDate) {
+    badge.textContent = `Rebalanced ${fmtDay(rebalanceDate)}`;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+  const u = universeInfo(data);
+  document.getElementById('overlay-note').textContent = u.excludes_sister
+    ? `Excluded Nasdaq open picks: ${excluded.join(', ') || 'none'}. Backfilled from the next S&P 500 Titan-12 ranks.`
+    : `Top 3 ${u.label} Titan-12 ranks. No sister-strategy overlap exclusion.`;
+  document.getElementById('overlay-grid').innerHTML = adjusted
+    .map(p => pickCard(p, { isOpen: true, maxAbs, rankLabel: `${u.label} rank #${p.rank}` }))
+    .join('');
+}
+
+function renderNext(data) {
+  const next = data.next || {};
+  const picks = next.picks || [];
+  const section = document.getElementById('next-section');
+  if (!picks.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  const u = universeInfo(data);
+  document.getElementById('next-date').textContent = `Enter ${fmtDay(next.date)}`;
+  const exclusion = u.excludes_sister
+    ? ` Excluded Nasdaq next picks: ${(next.excluded || []).join(', ') || 'unavailable'}.`
+    : '';
+  document.getElementById('next-note').textContent =
+    `Signal locked at the ${fmtDay(next.as_of)} close; fill at the next open.${exclusion}`;
+  document.getElementById('next-grid').innerHTML = picks.map(p => `
+    <div class="card rounded-xl border-2 border-dashed border-indigo-700 bg-white overflow-hidden">
+      <div class="accent-stripe" style="background:${tickerColor(p.ticker)}"></div>
+      <div class="p-5">
+        <div class="flex items-center justify-between">
+          <div class="text-3xl font-bold text-zinc-950">${p.ticker}</div>
+          <div class="text-[10px] text-zinc-600 font-medium">${u.label} rank #${p.rank}</div>
+        </div>
+        <div class="mt-1 text-sm text-zinc-700">${p.sector || ''}</div>
+        <div class="mt-2 text-xs text-zinc-600">Last close ${p.entry_price_estimate != null ? '$' + p.entry_price_estimate.toFixed(2) : '—'}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+const VIEW_KEY = 'titan12.view';
+const VIEW_IDS = ['top3', 'top20'];
+let activeView = 'top3';
+try {
+  if (localStorage.getItem(VIEW_KEY) === 'top20') activeView = 'top20';
+} catch (e) { /* storage unavailable */ }
+if (VIEW_IDS.includes(window.location.hash.replace('#', ''))) {
+  activeView = window.location.hash.replace('#', '');
+}
+
+function renderView() {
+  document.getElementById('view-top3').classList.toggle('hidden', activeView !== 'top3');
+  document.getElementById('view-top20').classList.toggle('hidden', activeView !== 'top20');
+  document.querySelectorAll('.view-tab').forEach(btn => {
+    const active = btn.dataset.viewTab === activeView;
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.classList.toggle('border-teal-700', active);
+    btn.classList.toggle('text-teal-800', active);
+    btn.classList.toggle('border-transparent', !active);
+    btn.classList.toggle('text-zinc-500', !active);
+  });
+}
+
+function rankChangeCell(r) {
+  if (r.prev_rank === null || r.prev_rank === undefined) {
+    return '<span class="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">NEW</span>';
+  }
+  const was = `<span class="text-[11px] text-zinc-500"> was #${r.prev_rank}</span>`;
+  if (r.rank_change > 0) return `<span class="font-semibold text-teal-700">▲${r.rank_change}</span>${was}`;
+  if (r.rank_change < 0) return `<span class="font-semibold text-rose-700">▼${-r.rank_change}</span>${was}`;
+  return `<span class="text-zinc-400">—</span>${was}`;
+}
+
+function signedCell(x) {
+  if (x === null || x === undefined) return '<span class="text-zinc-400">—</span>';
+  return `<span class="${x >= 0 ? 'text-teal-700' : 'text-rose-700'}">${fmtPct(x, 0)}</span>`;
+}
+
+function renderTop20(data) {
+  const board = data.top20 || {};
+  const rows = board.rows || [];
+  document.getElementById('top20-label').textContent = rows.length
+    ? `ranked for the ${fmtDay(board.rank_date)} rebalance · prices through ${fmtDay(board.as_of)}`
+    : 'no ranking available';
+  document.getElementById('top20-body').innerHTML = rows.map(r => `
+    <tr class="${r.held ? 'bg-teal-50' : ''}">
+      <td class="px-3 py-2 text-right tabular-nums text-zinc-500">${r.rank}</td>
+      <td class="px-3 py-2">
+        <div class="flex items-center gap-2">
+          <span class="w-1 h-5 rounded" style="background:${tickerColor(r.ticker)}"></span>
+          <span class="font-bold text-zinc-950">${r.ticker}</span>
+          ${r.held ? '<span class="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-teal-700 text-white">HELD</span>' : ''}
+        </div>
+        <div class="text-[11px] text-zinc-500">${r.company || ''}</div>
+      </td>
+      <td class="hidden sm:table-cell px-3 py-2 text-zinc-700">${r.sector || ''}</td>
+      <td class="px-3 py-2 text-right tabular-nums">${r.score != null ? r.score.toFixed(2) : '—'}</td>
+      <td class="px-3 py-2 tabular-nums whitespace-nowrap">${rankChangeCell(r)}</td>
+      <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.ret_1m)}</td>
+      <td class="px-3 py-2 text-right tabular-nums">${signedCell(r.off_6m_high)}</td>
+      <td class="hidden sm:table-cell px-3 py-2 text-right tabular-nums">${r.latest_price != null ? '$' + r.latest_price.toFixed(2) : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function renderHistory(data) {
+  const recent = data.recent || [];
+  document.getElementById('history-count').textContent = recent.length;
+  const allPicks = recent.flatMap(r => r.picks || []);
+  const maxAbs = Math.max(...allPicks.map(p => Math.abs(p.stock_return || 0)), 0.1);
+  document.getElementById('history-list').innerHTML = recent.slice().reverse().map(row => {
+    const retColor = row.portfolio_return >= 0 ? 'text-teal-700' : 'text-rose-700';
+    return `
+      <div class="rounded-lg bg-white border border-stone-300 px-3 py-2 flex items-center gap-3">
+        <div class="w-28 flex-shrink-0 flex items-baseline gap-2">
+          <div class="text-xs font-semibold text-zinc-700 leading-tight">${row.label}</div>
+          <div class="text-xs font-bold ${retColor} leading-tight">${fmtPct(row.portfolio_return)}</div>
+        </div>
+        <div class="flex-1">
+          ${row.excluded ? `<div class="mb-1 text-[10px] text-zinc-500">Excluded: ${row.excluded.join(', ') || 'none'}</div>` : ''}
+          <div class="grid grid-cols-3 gap-2">
+          ${row.picks.map(p => pickCard(p, { compact: true, maxAbs })).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const w = data.window || {};
+  const u = universeInfo(data);
+  document.getElementById('window-cum').innerHTML =
+    `${u.excludes_sister ? 'Adjusted' : 'Strategy'} <span class="font-semibold text-teal-700">${fmtPct(w.strategy_return, 1)}</span>
+     · ${u.benchmark} <span class="font-medium text-zinc-700">${fmtPct(w.spy_return, 1)}</span>`;
+}
+
+function renderUpdated(data) {
+  const dt = new Date(data.computed_at);
+  document.getElementById('last-updated').innerHTML = `
+    <div>updated ${dt.toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</div>
+    <div class="text-[10px] text-zinc-500">prices through ${fmtDay(data.data_freshness)}</div>
+  `;
+}
+
+async function load() {
+  const refreshBtn = document.getElementById('refresh-btn');
+  const refreshLabel = document.getElementById('refresh-label');
+  const refreshIcon = document.getElementById('refresh-icon');
+  const err = document.getElementById('error');
+  err.classList.add('hidden');
+  refreshBtn.disabled = true;
+  refreshLabel.textContent = 'Loading…';
+  refreshIcon.classList.add('animate-spin');
+  const requested = activeUniverse;
+  renderTabs();
+  try {
+    const fetchJson = async (url) => {
+      const resp = await fetch(url, { cache: 'no-store' });
+      const text = await resp.text();
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`);
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Non-JSON response from ${url}`);
+      }
+    };
+
+    let data;
+    try {
+      // A single-file report embeds its snapshot; no server to ask.
+      if (window.DASHBOARD_DATA) data = window.DASHBOARD_DATA;
+      else data = await fetchJson(`/api/dashboard?universe=${requested}`);
+    } catch (e) {
+      // The static export only carries the S&P 500 tab.
+      if (requested !== 'sp500') throw e;
+      data = await fetchJson('/dashboard.json');
+    }
+    if (requested !== activeUniverse) return;  // a newer tab click won
+    renderUniverse(data);
+    renderStats(data);
+    renderOverlay(data);
+    renderNext(data);
+    renderTop20(data);
+    renderHistory(data);
+    renderUpdated(data);
+  } catch (e) {
+    err.textContent = `Failed to load dashboard: ${e.message}`;
+    err.classList.remove('hidden');
+  } finally {
+    refreshBtn.disabled = false;
+    refreshLabel.textContent = 'Refresh';
+    refreshIcon.classList.remove('animate-spin');
+  }
+}
+
+document.getElementById('refresh-btn').addEventListener('click', load);
+document.querySelectorAll('.view-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeView = btn.dataset.viewTab;
+    try { localStorage.setItem(VIEW_KEY, activeView); } catch (e) { /* storage unavailable */ }
+    history.replaceState(null, '', `#${activeView}`);
+    renderView();
+  });
+});
+renderView();
+document.querySelectorAll('.universe-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.universe === activeUniverse) return;
+    activeUniverse = btn.dataset.universe;
+    try { localStorage.setItem(UNIVERSE_KEY, activeUniverse); } catch (e) { /* storage unavailable */ }
+    history.replaceState(null, '', `#${activeUniverse}`);
+    load();
+  });
+});
+window.addEventListener('hashchange', () => {
+  const next = window.location.hash.replace('#', '');
+  if (VIEW_IDS.includes(next)) {
+    activeView = next;
+    renderView();
+    return;
+  }
+  if (UNIVERSE_IDS.includes(next) && next !== activeUniverse) {
+    activeUniverse = next;
+    load();
+  }
+});
+load();
+
+  </script>
+</body>
+</html>

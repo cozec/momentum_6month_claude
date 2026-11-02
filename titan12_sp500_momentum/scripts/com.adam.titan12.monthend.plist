@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Titan-12 month-end report + trades email: daily at 4:30pm PT, after the
+       sister Nasdaq project's month-end workflow (22:30 UTC). The script itself
+       exits unless today is in the month-end window (last NYSE close through the
+       weekend before the rebalance) and it has not sent for that close yet, so
+       launchd replaying a run missed during sleep is safe.
+       Install: cp to ~/Library/LaunchAgents/ and launchctl load it. -->
+  <key>Label</key>
+  <string>com.adam.titan12.monthend</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-dimsu</string>
+    <string>/Users/adam/project/titan_12_sp500_momentum/.venv/bin/python</string>
+    <string>scripts/month_end.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/adam/project/titan_12_sp500_momentum</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>16</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key>
+  <string>/Users/adam/project/titan_12_sp500_momentum/logs/launchd.month_end.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/adam/project/titan_12_sp500_momentum/logs/launchd.month_end.log</string>
+</dict>
+</plist>
