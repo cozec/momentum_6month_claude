@@ -14,7 +14,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 import yfinance as yf
@@ -43,7 +43,7 @@ MAX_DOWNLOAD_WORKERS = 8
 # Reuse a just-built price panel for the identical (tickers, span, refresh)
 # request. The dashboard asks for two strategies in one page refresh, both
 # over the same universe — without this the universe downloads twice.
-_PANEL_CACHE: dict[tuple, tuple[float, pd.DataFrame]] = {}
+_PANEL_CACHE: dict[tuple, tuple[float, pd.DataFrame, pd.DataFrame]] = {}
 _PANEL_CACHE_TTL = 60.0
 _PANEL_LOCK = Lock()
 
@@ -206,10 +206,27 @@ def download_price_data(
     full_refresh: bool = False,
     end_overrides: Optional[Dict[str, pd.Timestamp]] = None,
 ) -> pd.DataFrame:
-    """Download adjusted price data for ``tickers``.
+    """Close panel for ``tickers``; see :func:`download_price_panels`."""
+    closes, _ = download_price_panels(
+        tickers, start_date, end_date, force_refresh, full_refresh, end_overrides
+    )
+    return closes
 
-    Returns a wide DataFrame whose columns are tickers and whose index
-    is the trading-day date. The "Close" column from yfinance with
+
+def download_price_panels(
+    tickers: Iterable[str],
+    start_date: str,
+    end_date: str,
+    force_refresh: bool = False,
+    full_refresh: bool = False,
+    end_overrides: Optional[Dict[str, pd.Timestamp]] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Download adjusted close and open panels for ``tickers``.
+
+    Returns ``(closes, opens)``: wide DataFrames whose columns are tickers
+    and whose index is the trading-day date. Both come from the same cleaned
+    frame per ticker, so they share one adjustment basis. Signals use the
+    closes; trades fill at the open (see :func:`_fill_prices`). The "Close" column from yfinance with
     ``auto_adjust=True`` represents the dividend- and split-adjusted
     close which is suitable for return calculations.
 
@@ -256,62 +273,77 @@ def download_price_data(
         entry = _PANEL_CACHE.get(cache_key)
     if entry is not None and now - entry[0] < _PANEL_CACHE_TTL:
         LOGGER.info("Reusing in-memory price panel (%.1fs old)", now - entry[0])
-        return entry[1].copy()
+        return entry[1].copy(), entry[2].copy()
 
     # yfinance is network-bound; fetch tickers concurrently.
-    closes: dict[str, pd.Series] = {}
+    frames: dict[str, pd.DataFrame] = {}
     failed: List[str] = []
     workers = max(1, min(MAX_DOWNLOAD_WORKERS, len(tickers)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(_fetch_ticker_close, t, start, ends[t], force_refresh, full_refresh): t
+            pool.submit(_fetch_ticker_prices, t, start, ends[t], force_refresh, full_refresh): t
             for t in tickers
         }
         for fut in as_completed(futures):
             ticker = futures[fut]
-            series = fut.result()
-            if series is None or series.empty:
+            frame = fut.result()
+            if frame is None or frame.empty:
                 failed.append(ticker)
             else:
-                closes[ticker] = series
+                frames[ticker] = frame
 
     if failed:
         LOGGER.warning("Failed to retrieve data for: %s", ", ".join(failed))
 
-    if not closes:
+    if not frames:
         raise RuntimeError("No price data was successfully downloaded.")
 
-    panel = pd.concat(closes.values(), axis=1).sort_index()
+    closes = pd.concat(
+        [f["Close"].rename(t) for t, f in frames.items()], axis=1
+    ).sort_index()
+    raw_opens = pd.concat(
+        [f["Open"].rename(t) for t, f in frames.items()], axis=1
+    ).reindex(closes.index)
+    opens = _fill_prices(raw_opens, closes)
     with _PANEL_LOCK:
-        _PANEL_CACHE[cache_key] = (now, panel)
-    return panel
+        _PANEL_CACHE[cache_key] = (now, closes, opens)
+    return closes.copy(), opens.copy()
 
 
-def load_open_prices(closes: pd.DataFrame) -> pd.DataFrame:
-    """Opening prices matching a close panel from :func:`download_price_data`.
+def _fill_prices(opens: pd.DataFrame, closes: pd.DataFrame) -> pd.DataFrame:
+    """Open panel usable as fill prices.
 
-    Reads the ``Open`` column of each ticker's cache file (refreshed by the
-    close download) on the close panel's dates. Trades fill at the first
-    trading day's open, so this is the fill-price panel; signals still use
-    closes.
+    A missing or non-positive open (Yahoo occasionally reports ``Open=0``)
+    is replaced by the previous session's close: the last price known when
+    the trade is decided, so no lookahead. Only a ticker's first bar, which
+    has no previous close, falls back to that day's close. Substitutions
+    are logged.
     """
-    opens = {}
-    for ticker in closes.columns:
-        df = pd.read_csv(_cache_path(ticker), index_col="Date", parse_dates=True)
-        opens[ticker] = df["Open"]
-    panel = pd.DataFrame(opens).reindex(index=closes.index)
-    # A missing open (rare data gap) falls back to that day's close.
-    return panel.fillna(closes)
+    present = closes.notna()
+    bad = opens.isna() | (opens <= 0)
+    bad &= present
+    filled = opens.where(~bad)
+    filled = filled.fillna(closes.ffill().shift(1).where(present))
+    filled = filled.fillna(closes)
+    if bad.any().any():
+        counts = bad.sum()
+        counts = counts[counts > 0].sort_values(ascending=False)
+        LOGGER.warning(
+            "Replaced %d missing/non-positive opens with the prior close: %s",
+            int(counts.sum()),
+            ", ".join(f"{t} ({n})" for t, n in counts.head(10).items()),
+        )
+    return filled
 
 
-def _fetch_ticker_close(
+def _fetch_ticker_prices(
     ticker: str,
     start: pd.Timestamp,
     end: pd.Timestamp,
     force_refresh: bool,
     full_refresh: bool,
-) -> Optional[pd.Series]:
-    """Resolve one ticker's close series over ``[start, end]``.
+) -> Optional[pd.DataFrame]:
+    """Resolve one ticker's ``Close`` and ``Open`` columns over ``[start, end]``.
 
     Reuses the CSV cache, fetching only the missing tail when stale, and
     writes the merged history back. Returns ``None`` when no usable data
@@ -378,7 +410,9 @@ def _fetch_ticker_close(
             df.to_csv(_cache_path(ticker), index_label="Date")
 
     # Restrict to the requested window for the returned panel.
-    window = df.loc[(df.index >= start) & (df.index <= end), "Close"]
+    window = df.loc[(df.index >= start) & (df.index <= end)]
     if window.empty:
         return None
-    return window.rename(ticker)
+    if "Open" not in window.columns:
+        window = window.assign(Open=float("nan"))
+    return window[["Close", "Open"]]

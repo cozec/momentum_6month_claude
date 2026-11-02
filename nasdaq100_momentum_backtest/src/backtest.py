@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from .config import BacktestConfig
-from .download_data import _cache_path, download_price_data, load_open_prices
+from .download_data import _cache_path, download_price_panels
 from .membership import get_eligible_universe, load_nasdaq100_membership
 from .nyse_calendar import first_session_on_or_after, last_session_before
 from .signals import (
@@ -149,7 +149,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         extras.add(secondary)
     all_tickers = sorted(set(universe_tickers) | extras)
 
-    prices = download_price_data(
+    prices, opens = download_price_panels(
         all_tickers,
         config.start_date,
         config.end_date,
@@ -164,8 +164,8 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         len(former_ends),
     )
     # Signals use closes; trades fill at the first trading day's open (the
-    # signal is locked by the previous month's last close).
-    opens = load_open_prices(prices)
+    # signal is locked by the previous month's last close). The buy-and-hold
+    # benchmarks stay on closes so their final value is last/first close.
 
     monthly_returns = calculate_monthly_returns(prices)
     first_days = get_first_trading_days(prices)
@@ -245,8 +245,8 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
             slippage_cost = 0.0
         net_return = gross_return - trade_cost
 
-        qqq_entry = _price_on_or_before(opens[benchmark], entry_date)
-        qqq_exit = _price_on_or_before(opens[benchmark], exit_date)
+        qqq_entry = _price_on_or_before(prices[benchmark], entry_date)
+        qqq_exit = _price_on_or_before(prices[benchmark], exit_date)
         qqq_return = (
             qqq_exit / qqq_entry - 1.0
             if qqq_entry and qqq_exit
@@ -254,8 +254,8 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         )
 
         if has_secondary:
-            tqqq_entry = _price_on_or_before(opens[secondary], entry_date)
-            tqqq_exit = _price_on_or_before(opens[secondary], exit_date)
+            tqqq_entry = _price_on_or_before(prices[secondary], entry_date)
+            tqqq_exit = _price_on_or_before(prices[secondary], exit_date)
             tqqq_return = (
                 tqqq_exit / tqqq_entry - 1.0
                 if tqqq_entry and tqqq_exit
@@ -555,7 +555,9 @@ def compute_leaderboard(
     rest of the list is context for manual review. Trend columns use the
     latest close in ``prices``: ``since_entry`` (return from the entry
     fill — ``entry_date``'s open from ``opens``, else its close), ``ret_1m`` (last 21 trading days) and ``off_6m_high`` (versus the
-    highest close of the last 126 trading days).
+    highest close of the last 126 trading days). When ``entry_date`` is
+    after the latest bar (the upcoming rebalance), nothing has filled yet and
+    ``entry_price`` / ``since_entry`` are NaN.
 
     With ``prev_entry_date`` (the previous rebalance) it also reports
     ``prev_rank`` (NaN when the name wasn't ranked then), ``rank_change``
@@ -577,7 +579,11 @@ def compute_leaderboard(
     recent = prices[top.index].ffill()
     latest = recent.iloc[-1]
     fills = (opens if opens is not None else prices)[top.index].ffill()
-    entry = fills.loc[:entry_date].iloc[-1]
+    if entry_date > prices.index[-1]:
+        # Upcoming rebalance: nothing has filled yet.
+        entry = pd.Series(np.nan, index=top.index)
+    else:
+        entry = fills.loc[:entry_date].iloc[-1]
     return pd.DataFrame({
         "rank": ranks,
         "ticker": top.index,

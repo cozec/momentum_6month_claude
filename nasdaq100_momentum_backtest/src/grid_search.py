@@ -26,7 +26,7 @@ from .backtest import (
     calculate_portfolio_return,
 )
 from .config import BacktestConfig
-from .download_data import download_price_data, load_open_prices
+from .download_data import download_price_panels
 from .membership import get_eligible_universe
 from .signals import (
     calculate_momentum_scores,
@@ -158,12 +158,11 @@ def run_grid(
         "Downloading prices for grid: %d tickers, %s → %s",
         len(all_tickers), config.start_date, config.end_date,
     )
-    prices = download_price_data(
+    prices, opens = download_price_panels(
         all_tickers, config.start_date, config.end_date,
         force_refresh=config.force_refresh,
         full_refresh=config.full_refresh,
     )
-    opens = load_open_prices(prices)
     monthly_returns = calculate_monthly_returns(prices)
     first_days = get_first_trading_days(prices)
     membership_df = _build_membership(config)

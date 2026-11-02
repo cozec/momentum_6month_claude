@@ -120,7 +120,7 @@ The code addresses each potential source of bias explicitly:
 - **Missing price data / delisted / renamed tickers** — the downloader retries with backoff, logs failures, and skips tickers that come back empty. The eligible universe is intersected with the tickers we have prices for.
 - **Insufficient history** — stocks with fewer than `lookback_months` valid completed returns are excluded from the rank.
 - **Corporate actions** — adjusted close (`auto_adjust=True` in yfinance) is used throughout, which folds in dividends and splits.
-- **Execution assumption** — the signal is locked by the last close of the prior month; the first trading day's adjusted open is used as both the exit price for the prior month and the entry price for the new month (benchmarks too).
+- **Execution assumption** — the signal is locked by the last close of the prior month; the first trading day's adjusted open is used as both the exit price for the prior month and the entry price for the new month. A missing or zero open falls back to the prior close (logged). QQQ/TQQQ buy & hold use closes ($10,000 × last close / first close).
 
 ## Membership
 

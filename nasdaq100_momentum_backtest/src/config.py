@@ -55,7 +55,7 @@ class BacktestConfig:
     rebalance_period_months: int = 1
     benchmark: str = "QQQ"
     secondary_benchmark: str = "TQQQ"
-    initial_capital: float = 100_000.0
+    initial_capital: float = 10_000.0
     transaction_cost_bps: float = 0.0
     slippage_bps: float = 0.0
     min_price_history_months: int = 6

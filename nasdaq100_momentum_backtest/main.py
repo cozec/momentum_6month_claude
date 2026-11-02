@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
         help="Per-trade slippage in basis points.",
     )
     parser.add_argument(
-        "--initial-capital", type=float, default=100_000.0,
+        "--initial-capital", type=float, default=10_000.0,
     )
     parser.add_argument(
         "--use-historical-membership", action="store_true",

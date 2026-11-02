@@ -364,16 +364,38 @@ class TestOpenFills(unittest.TestCase):
         for t, row in board.iterrows():
             self.assertAlmostEqual(row["entry_price"], self.opens.loc[self.entry, t])
 
-    def test_load_open_prices_reads_cache_and_fills_gaps(self):
+    def test_upcoming_leaderboard_has_no_entry_fill(self):
+        board = compute_leaderboard(
+            self.prices, self.monthly, self.config, pd.Timestamp("2026-11-02"),
+            opens=self.opens,
+        )
+        self.assertTrue(board["entry_price"].isna().all())
+        self.assertTrue(board["since_entry"].isna().all())
+
+    def test_bad_opens_fall_back_to_prior_close(self):
+        dates = pd.bdate_range("2026-10-01", "2026-10-07")
+        closes = pd.DataFrame({"XYZ": [11.0, 12.0, 13.0, 14.0, 15.0]}, index=dates)
+        opens = pd.DataFrame({"XYZ": [np.nan, 12.5, 0.0, np.nan, 14.5]}, index=dates)
+        filled = download_data._fill_prices(opens, closes)
+        # First bar has no prior close, so it uses its own close.
+        self.assertEqual(filled["XYZ"].tolist(), [11.0, 12.5, 12.0, 13.0, 14.5])
+
+    def test_panels_share_one_frame_per_ticker(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp)
-        with mock.patch.object(download_data, "RAW_PRICES_DIR", tmp):
-            dates = pd.bdate_range("2026-10-01", "2026-10-07")
-            df = pd.DataFrame({"Open": [10.0, np.nan, 12.0, 13.0, 14.0],
-                               "Close": [11.0, 12.0, 13.0, 14.0, 15.0]}, index=dates)
+        dates = pd.bdate_range("2026-10-01", "2026-10-07")
+        df = pd.DataFrame({"Open": [10.0, 0.0, 12.0, 13.0, 14.0],
+                           "High": 20.0, "Low": 5.0,
+                           "Close": [11.0, 12.0, 13.0, 14.0, 15.0],
+                           "Volume": 100}, index=dates)
+        with mock.patch.object(download_data, "RAW_PRICES_DIR", tmp), \
+                mock.patch.dict(download_data._PANEL_CACHE, clear=True):
             df.to_csv(download_data._cache_path("XYZ"), index_label="Date")
-            opens = download_data.load_open_prices(df[["Close"]].rename(columns={"Close": "XYZ"}))
-        self.assertEqual(opens["XYZ"].tolist(), [10.0, 12.0, 12.0, 13.0, 14.0])
+            closes, opens = download_data.download_price_panels(
+                ["XYZ"], "2026-10-01", "2026-10-07"
+            )
+        self.assertEqual(closes["XYZ"].tolist(), df["Close"].tolist())
+        self.assertEqual(opens["XYZ"].tolist(), [10.0, 11.0, 12.0, 13.0, 14.0])
 
 
 class TestLeaderboard(unittest.TestCase):
@@ -502,10 +524,10 @@ class TestIncrementalCacheAdjustment(unittest.TestCase):
 
     def test_split_triggers_full_redownload(self):
         with mock.patch.object(download_data, "_download_one", side_effect=self._fake_download) as dl:
-            close = download_data._fetch_ticker_close(
+            close = download_data._fetch_ticker_prices(
                 "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
                 force_refresh=True, full_refresh=False,
-            )
+            )["Close"]
         self.assertEqual(dl.call_count, 2)
         self.assertGreater(close.pct_change().min(), -0.05)
         pd.testing.assert_series_equal(close, self.provider.rename("XYZ"), check_names=False,
@@ -515,7 +537,7 @@ class TestIncrementalCacheAdjustment(unittest.TestCase):
         # Delisted names can return only a handful of recent bars.
         self.provider = self.provider.loc["2026-06-19":]
         with mock.patch.object(download_data, "_download_one", side_effect=self._fake_download):
-            download_data._fetch_ticker_close(
+            download_data._fetch_ticker_prices(
                 "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
                 force_refresh=True, full_refresh=False,
             )
@@ -536,17 +558,17 @@ class TestIncrementalCacheAdjustment(unittest.TestCase):
     def test_failed_refresh_is_not_retried_immediately(self):
         with mock.patch.object(download_data, "_download_one", return_value=None) as dl:
             for _ in range(3):
-                close = download_data._fetch_ticker_close(
+                close = download_data._fetch_ticker_prices(
                     "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
                     force_refresh=False, full_refresh=False,
-                )
+                )["Close"]
         self.assertEqual(dl.call_count, 1)
         self.assertEqual(close.index.max(), pd.Timestamp("2026-06-24"))
 
     def test_unchanged_basis_merges_tail_only(self):
         self.provider = pd.Series(700.0 + np.arange(len(self.provider)), index=self.provider.index)
         with mock.patch.object(download_data, "_download_one", side_effect=self._fake_download) as dl:
-            download_data._fetch_ticker_close(
+            download_data._fetch_ticker_prices(
                 "XYZ", pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-31"),
                 force_refresh=True, full_refresh=False,
             )

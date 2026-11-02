@@ -11,10 +11,10 @@
 | Lookback | 6 completed months |
 | Score method | `average_monthly_return` |
 | Rebalance frequency | First trading day of each month |
-| Fill | Signal locked by the prior month's last close; entry and exit at the first trading day's **open** (benchmarks too) |
+| Fill | Signal locked by the prior month's last close; entry and exit at the first trading day's **open**. QQQ/TQQQ buy & hold use closes, so final = $10,000 × last close / first close |
 | Transaction cost | 0 bps (disabled) |
 | Slippage | 0 bps (disabled) |
-| Initial capital | $100,000 |
+| Initial capital | $10,000 |
 | Primary benchmark | QQQ (buy & hold) |
 | Secondary benchmark | TQQQ (buy & hold, 3× leveraged QQQ) |
 | Rebalances executed | 117 |
@@ -24,18 +24,20 @@
 
 | Metric | Strategy | QQQ B&H | TQQQ B&H |
 |--------|---------:|--------:|---------:|
-| CAGR | **50.59%** | 20.60% | 40.32% |
-| Annualized volatility | 38.39% | 19.50% | 60.46% |
-| Sharpe ratio | **1.26** | 1.06 | 0.87 |
-| Max drawdown | -35.49% | -32.24% | **-78.88%** |
-| Total return | +5,314% | +521% | +2,620% |
-| Final value (from $100k) | $5,414,150 | $621,213 | $2,719,724 |
-| Average monthly return | 4.03% | 1.73% | 4.41% |
-| Median monthly return | 2.09% | 1.84% | 4.79% |
-| Best month | +53.24% | +16.09% | +49.87% |
-| Worst month | -21.71% | -13.78% | -45.00% |
-| Win rate vs QQQ (months) | 61.5% | — | — |
-| Win rate vs TQQQ (months) | 46.2% | — | — |
+| Final value (from $10k) | **$541,415** | $62,298 | $274,357 |
+| Total return | +5,314% | +523% | +2,644% |
+| CAGR | **50.59%** | 20.64% | 40.45% |
+| Annualized volatility | 38.39% | 20.11% | 62.87% |
+| Sharpe ratio | **1.26** | 1.04 | 0.86 |
+| Max drawdown | -35.49% | -33.67% | **-80.13%** |
+| Alpha vs QQQ (annualized) | 22.83% | 0.00% | — |
+| Beta vs QQQ | 1.22 | 1.00 | — |
+| Average monthly return | 4.03% | 1.74% | 4.52% |
+| Median monthly return | 2.09% | 2.08% | 5.10% |
+| Best month | +53.24% | +16.69% | +52.19% |
+| Worst month | -21.71% | -15.58% | -52.31% |
+| Win rate vs QQQ (months) | 65.0% | — | — |
+| Win rate vs TQQQ (months) | 48.7% | — | — |
 | Average turnover | 82.91%/mo | — | — |
 
 ## Fill convention: next open (2026-11-02)
@@ -45,11 +47,15 @@ Trades now fill at the **first trading day's open** instead of its close
 Titan-12 and the decide-on-close / fill-at-next-open rule. Same window
 (2016-08 → 2026-05, 117 rebalances), gross of costs:
 
-| Fill | CAGR | Sharpe | Max DD | Final value ($100k) |
-|------|-----:|-------:|-------:|--------------------:|
-| Close (old) | 51.02% | 1.25 | -32.43% | $5,564,986 |
-| **Open (new)** | **50.59%** | **1.26** | **-35.49%** | **$5,414,150** |
-| QQQ, open | 20.60% | 1.06 | -32.24% | $621,213 |
+| Strategy | Final equity ($10k) | Return | CAGR | Max DD | Sharpe | Alpha | Beta |
+|----------|--------------------:|-------:|-----:|-------:|-------:|------:|-----:|
+| Close fill (old) | $556,499 | +5,465% | 51.02% | -32.43% | 1.25 | 21.62% | 1.31 |
+| **Open fill (new)** | **$541,415** | **+5,314%** | **50.59%** | **-35.49%** | **1.26** | **22.83%** | **1.22** |
+| QQQ B&H | $62,298 | +523% | 20.64% | -33.67% | 1.04 | 0.00% | 1.00 |
+
+Alpha (annualized) and beta are from a regression of monthly returns on
+QQQ's. QQQ buy & hold is $10,000 × last close / first close over the
+rebalance window.
 
 The headline barely moves (no lookahead was involved either way: the signal
 is locked a session before both fills), but individual months shift by
