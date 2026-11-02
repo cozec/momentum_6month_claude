@@ -73,6 +73,7 @@ def borrow_prices(
         The tickers whose files were copied.
     """
 
+    raw_price_dir.mkdir(parents=True, exist_ok=True)
     borrowed = []
     for ticker in sorted(tickers):
         local = raw_price_dir / f"{ticker}.csv"

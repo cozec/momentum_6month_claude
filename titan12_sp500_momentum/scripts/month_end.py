@@ -386,6 +386,7 @@ def main() -> int:
 
     run([PYTHON, "scripts/export_static_dashboard.py", "--report", str(REPORT_PATH)])
     email = build_email(payload, test=args.force)
+    PREVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
     PREVIEW_PATH.write_text(email["html"])
     log(f"Subject: {email['subject']}")
     log(f"Preview: {PREVIEW_PATH}")
