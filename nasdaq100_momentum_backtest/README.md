@@ -120,7 +120,7 @@ The code addresses each potential source of bias explicitly:
 - **Missing price data / delisted / renamed tickers** — the downloader retries with backoff, logs failures, and skips tickers that come back empty. The eligible universe is intersected with the tickers we have prices for.
 - **Insufficient history** — stocks with fewer than `lookback_months` valid completed returns are excluded from the rank.
 - **Corporate actions** — adjusted close (`auto_adjust=True` in yfinance) is used throughout, which folds in dividends and splits.
-- **Execution assumption** — the first trading day's adjusted close is used as both the exit price for the prior month and the entry price for the new month.
+- **Execution assumption** — the signal is locked by the last close of the prior month; the first trading day's adjusted open is used as both the exit price for the prior month and the entry price for the new month (benchmarks too).
 
 ## Membership
 
@@ -171,7 +171,7 @@ A small FastAPI app at [`webapp/`](webapp/) serves a Tailwind-styled page for **
 The **Top 3** tab shows:
 
 - **Current open holdings** — with MTD return and an "in progress" badge.
-- **Next month's planned picks** — entry-price estimate, momentum rank, and an MOC-order note so live trades line up with the backtest's first-trading-day fill assumption.
+- **Next month's planned picks** — entry-price estimate, momentum rank, and a market-on-open note so live trades line up with the backtest's fill at the first trading day's open.
 - **Summary stats** — CAGR, Sharpe, max drawdown, win-rate vs the strategy's benchmark.
 - **6-month daily candle chart** — an interactive candlestick panel (TradingView lightweight-charts) for the selected holding, with an entry marker and a ticker switcher across the current picks.
 - **Last 12 completed rebalances** — vertical feed with entry/exit prices and per-stock return.
@@ -230,4 +230,4 @@ The email lists each strategy's trades (sell / buy / keep), next picks with the 
 
 - Default universe is the **current** Nasdaq-100 (101 tickers with both Alphabet share classes). Results are survivorship-biased and overstate the strategy's historical edge — winners like NVDA, AVGO, PLTR, MSTR, APP, SNDK, WDC, SHOP, INSM, AXON that were added in the 2020s were already present in the universe back in 2015. The grid-search run quantifies this: dropping post-2018 additions cuts the headline CAGR from ~80% to ~47%.
 - The hardcoded universe is a static snapshot of the current Nasdaq-100. Index reconstitutions happen quarterly; refresh `CURRENT_NASDAQ100` in `src/config.py` periodically (or wire up a Wikipedia/Nasdaq fetcher) to keep current.
-- Execution assumes you trade at the first-day adjusted close with the configured cost/slippage. Real-world fills, capacity, and tax effects are not modelled.
+- Execution assumes you trade at the first trading day's adjusted open (the signal is locked by the previous month's last close) with the configured cost/slippage. Real-world fills, capacity, and tax effects are not modelled.

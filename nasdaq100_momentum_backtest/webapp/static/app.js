@@ -149,7 +149,7 @@ function renderNext(root, data) {
     `;
   }).join('');
   if (note) {
-    note.innerHTML = `Signal is determined by the last close before ${fmtDay(meta.planned_entry_date)}. Place an MOC order to match the backtest's entry assumption.`;
+    note.innerHTML = `Signal is determined by the last close before ${fmtDay(meta.planned_entry_date)}. Place a market-on-open order for that day to match the backtest's fill.`;
   }
 }
 

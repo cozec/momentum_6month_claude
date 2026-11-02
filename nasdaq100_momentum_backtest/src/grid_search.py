@@ -26,7 +26,7 @@ from .backtest import (
     calculate_portfolio_return,
 )
 from .config import BacktestConfig
-from .download_data import download_price_data
+from .download_data import download_price_data, load_open_prices
 from .membership import get_eligible_universe
 from .signals import (
     calculate_momentum_scores,
@@ -57,9 +57,11 @@ def _strategy_returns(
     top_n: int,
     score_method: str,
     excluded_tickers: set,
+    opens: pd.DataFrame,
 ) -> pd.Series:
     """Return the per-rebalance gross strategy returns as a Series
-    indexed by entry date.
+    indexed by entry date. Signals use ``prices`` (closes); trades fill at
+    the rebalance day's open from ``opens``.
     """
     available = [t for t in prices.columns if t not in excluded_tickers]
     pairs = []
@@ -80,7 +82,7 @@ def _strategy_returns(
             ret = 0.0
         else:
             ret, _, _, _ = calculate_portfolio_return(
-                selected, prices, entry, exit_
+                selected, opens, entry, exit_
             )
         pairs.append((entry, ret))
     return pd.Series(dict(pairs), dtype=float)
@@ -161,6 +163,7 @@ def run_grid(
         force_refresh=config.force_refresh,
         full_refresh=config.full_refresh,
     )
+    opens = load_open_prices(prices)
     monthly_returns = calculate_monthly_returns(prices)
     first_days = get_first_trading_days(prices)
     membership_df = _build_membership(config)
@@ -189,6 +192,7 @@ def run_grid(
                 top_n=config.top_n,
                 score_method=config.score_method,
                 excluded_tickers=excluded,
+                opens=opens,
             )
             ppy = 12.0 / period
             row = {

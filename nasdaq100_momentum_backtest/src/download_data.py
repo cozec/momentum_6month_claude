@@ -287,6 +287,23 @@ def download_price_data(
     return panel
 
 
+def load_open_prices(closes: pd.DataFrame) -> pd.DataFrame:
+    """Opening prices matching a close panel from :func:`download_price_data`.
+
+    Reads the ``Open`` column of each ticker's cache file (refreshed by the
+    close download) on the close panel's dates. Trades fill at the first
+    trading day's open, so this is the fill-price panel; signals still use
+    closes.
+    """
+    opens = {}
+    for ticker in closes.columns:
+        df = pd.read_csv(_cache_path(ticker), index_col="Date", parse_dates=True)
+        opens[ticker] = df["Open"]
+    panel = pd.DataFrame(opens).reindex(index=closes.index)
+    # A missing open (rare data gap) falls back to that day's close.
+    return panel.fillna(closes)
+
+
 def _fetch_ticker_close(
     ticker: str,
     start: pd.Timestamp,

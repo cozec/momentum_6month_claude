@@ -3,7 +3,7 @@
 Runs from a daily cron over the last days of each month (see
 ``.github/workflows/monthly-picks-email.yml``) and only sends on the evening
 of the month's last NYSE trading day — the close that locks next month's
-picks — so the trades can be placed as market-on-close orders on the next
+picks — so the trades can be placed as market-on-open orders on the next
 first trading day, matching the backtest's fill.
 
 The script:
@@ -261,7 +261,7 @@ def _strategy_block(data: Dict[str, Any]) -> str:
       <div style="margin-bottom:32px">
         <div style="font-size:18px;font-weight:700;color:#0F172A;margin-bottom:4px">{_label(data)}</div>
         <div style="font-size:12px;color:#64748B;margin-bottom:12px">
-          Trades for the {entry} close · signal locked {next_meta.get('signal_locked_as_of', '—')}
+          Trades at the {entry} open · signal locked {next_meta.get('signal_locked_as_of', '—')}
         </div>
         {_table(["Action", "Tickers"], trade_rows)}
         <div style="font-size:13px;font-weight:600;color:#0F172A;margin:16px 0 6px">Next picks (equal weight, ⅓ each)</div>
@@ -296,7 +296,7 @@ def build_email(bundle: Dict[str, Any]) -> Dict[str, str]:
 <div style="max-width:680px;margin:0 auto;background:white;border:1px solid #E2E8F0;border-radius:12px;padding:24px">
   <div style="font-size:22px;font-weight:800;margin-bottom:4px">Momentum rotation · next month's trades</div>
   <div style="font-size:13px;color:#475569;margin-bottom:24px">
-    Place <b>market-on-close</b> orders on <b>{entry or '—'}</b> (the first trading day) to match the backtest's fill.
+    Place <b>market-on-open</b> orders for <b>{entry or '—'}</b> (the first trading day) to match the backtest's fill.
     {link_html}
   </div>
   {blocks}
@@ -307,7 +307,7 @@ def build_email(bundle: Dict[str, Any]) -> Dict[str, str]:
   </div>
 </div></body></html>"""
 
-    lines = [f"Momentum trades for {entry} (market-on-close on the first trading day)", ""]
+    lines = [f"Momentum trades for {entry} (market-on-open on the first trading day)", ""]
     for d in strategies:
         lines.append(f"== {_label(d)} ==")
         lines.append(f"  {_trade_line(d)}")

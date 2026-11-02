@@ -20,6 +20,7 @@ from src.backtest import (  # noqa: E402
     calculate_portfolio_return,
     compute_leaderboard,
     compute_next_position,
+    compute_open_position,
 )
 from src import download_data  # noqa: E402
 from src.config import BacktestConfig  # noqa: E402
@@ -335,6 +336,46 @@ class TestComputeNextPosition(unittest.TestCase):
         )
 
 
+class TestOpenFills(unittest.TestCase):
+    """Trades fill at the first trading day's open; signals use closes."""
+
+    def setUp(self):
+        tickers = ["AAA", "BBB", "CCC", "QQQ"]
+        self.prices = _make_daily_prices("2025-01-01", "2026-10-09", tickers, seed=3)
+        self.opens = self.prices * 0.98  # opens 2% below the closes
+        self.monthly = calculate_monthly_returns(self.prices)
+        self.config = BacktestConfig(
+            tickers=tickers[:-1], benchmark="QQQ", secondary_benchmark="", top_n=2,
+        )
+        self.entry = pd.Timestamp("2026-10-01")
+
+    def test_open_position_enters_at_open_and_marks_at_latest_close(self):
+        pos = compute_open_position(
+            self.prices, self.monthly, self.config, self.entry, opens=self.opens
+        ).set_index("ticker")
+        for t, row in pos.iterrows():
+            self.assertAlmostEqual(row["entry_price"], self.opens.loc[self.entry, t])
+            self.assertAlmostEqual(row["exit_price"], self.prices[t].iloc[-1])
+
+    def test_leaderboard_since_entry_uses_open(self):
+        board = compute_leaderboard(
+            self.prices, self.monthly, self.config, self.entry, opens=self.opens
+        ).set_index("ticker")
+        for t, row in board.iterrows():
+            self.assertAlmostEqual(row["entry_price"], self.opens.loc[self.entry, t])
+
+    def test_load_open_prices_reads_cache_and_fills_gaps(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        with mock.patch.object(download_data, "RAW_PRICES_DIR", tmp):
+            dates = pd.bdate_range("2026-10-01", "2026-10-07")
+            df = pd.DataFrame({"Open": [10.0, np.nan, 12.0, 13.0, 14.0],
+                               "Close": [11.0, 12.0, 13.0, 14.0, 15.0]}, index=dates)
+            df.to_csv(download_data._cache_path("XYZ"), index_label="Date")
+            opens = download_data.load_open_prices(df[["Close"]].rename(columns={"Close": "XYZ"}))
+        self.assertEqual(opens["XYZ"].tolist(), [10.0, 12.0, 12.0, 13.0, 14.0])
+
+
 class TestLeaderboard(unittest.TestCase):
     def setUp(self):
         tickers = ["AAA", "BBB", "CCC", "DDD", "EEE", "QQQ"]
@@ -418,7 +459,7 @@ class TestPicksEmail(unittest.TestCase):
         email = self.mod.build_email(self.bundle)
         self.assertIn("2026-11-02", email["subject"])
         self.assertIn("sell INTC, SNDK; buy AMD, CRWD; keep MU", email["subject"])
-        self.assertIn("market-on-close", email["html"])
+        self.assertIn("market-on-open", email["html"])
         self.assertIn("—", email["html"])
 
     def test_titan_section_appended(self):

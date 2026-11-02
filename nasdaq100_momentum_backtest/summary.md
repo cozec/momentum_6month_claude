@@ -11,6 +11,7 @@
 | Lookback | 6 completed months |
 | Score method | `average_monthly_return` |
 | Rebalance frequency | First trading day of each month |
+| Fill | Signal locked by the prior month's last close; entry and exit at the first trading day's **open** (benchmarks too) |
 | Transaction cost | 0 bps (disabled) |
 | Slippage | 0 bps (disabled) |
 | Initial capital | $100,000 |
@@ -23,19 +24,37 @@
 
 | Metric | Strategy | QQQ B&H | TQQQ B&H |
 |--------|---------:|--------:|---------:|
-| CAGR | **51.02%** | 20.64% | 40.45% |
-| Annualized volatility | 39.21% | 20.11% | 62.87% |
-| Sharpe ratio | **1.25** | 1.04 | 0.86 |
-| Max drawdown | -32.43% | -33.67% | **-80.13%** |
-| Total return | +5,465% | +523% | +2,644% |
-| Final value (from $100k) | $5,564,986 | $622,983 | $2,743,567 |
-| Average monthly return | 4.08% | 1.74% | 4.52% |
-| Median monthly return | 1.90% | 2.08% | 5.10% |
-| Best month | +54.71% | +16.69% | +52.19% |
-| Worst month | -21.38% | -15.58% | -52.31% |
-| Win rate vs QQQ (months) | 62.4% | — | — |
-| Win rate vs TQQQ (months) | 47.0% | — | — |
+| CAGR | **50.59%** | 20.60% | 40.32% |
+| Annualized volatility | 38.39% | 19.50% | 60.46% |
+| Sharpe ratio | **1.26** | 1.06 | 0.87 |
+| Max drawdown | -35.49% | -32.24% | **-78.88%** |
+| Total return | +5,314% | +521% | +2,620% |
+| Final value (from $100k) | $5,414,150 | $621,213 | $2,719,724 |
+| Average monthly return | 4.03% | 1.73% | 4.41% |
+| Median monthly return | 2.09% | 1.84% | 4.79% |
+| Best month | +53.24% | +16.09% | +49.87% |
+| Worst month | -21.71% | -13.78% | -45.00% |
+| Win rate vs QQQ (months) | 61.5% | — | — |
+| Win rate vs TQQQ (months) | 46.2% | — | — |
 | Average turnover | 82.91%/mo | — | — |
+
+## Fill convention: next open (2026-11-02)
+
+Trades now fill at the **first trading day's open** instead of its close
+(market-on-open, decided on the previous month's last close), matching
+Titan-12 and the decide-on-close / fill-at-next-open rule. Same window
+(2016-08 → 2026-05, 117 rebalances), gross of costs:
+
+| Fill | CAGR | Sharpe | Max DD | Final value ($100k) |
+|------|-----:|-------:|-------:|--------------------:|
+| Close (old) | 51.02% | 1.25 | -32.43% | $5,564,986 |
+| **Open (new)** | **50.59%** | **1.26** | **-35.49%** | **$5,414,150** |
+| QQQ, open | 20.60% | 1.06 | -32.24% | $621,213 |
+
+The headline barely moves (no lookahead was involved either way: the signal
+is locked a session before both fills), but individual months shift by
+~2.8% on average, so the history tables changed. Sections below written
+before this date use close fills.
 
 ## Snapshot vs PIT membership — by strategy
 
@@ -222,7 +241,7 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
 | Monthly cron | GitHub Actions (`monthly-picks-email.yml`) | Runs at `30 22 26-31 * *` UTC and sends only on the month's last NYSE trading day (when next month's picks lock). Pre-warms `/health`, fetches `/api/dashboard?refresh=1`, emails each strategy's sell / buy / keep list. |
 | Email delivery | Resend (3,000 / mo free) | Cloudflare-fronted; the script sends a non-default `User-Agent` so the POST isn't blocked with code 1010. |
 
-**Month-end timing:** after the close of the month's last NYSE trading day the dashboard shows both strategies' locked "Next picks" and the email goes out with the trade list; on the first trading day both strategies rebalance at the close (market-on-close), and the completed month becomes a new row in "Past rebalances". The lock uses an NYSE holiday calendar (`src/nyse_calendar.py`), and today's bar is ignored until 16:30 ET so a live intraday price is never treated as a close.
+**Month-end timing:** after the close of the month's last NYSE trading day the dashboard shows both strategies' locked "Next picks" and the email goes out with the trade list; on the first trading day the strategy rebalances at the open (market-on-open), and the completed month becomes a new row in "Past rebalances". The lock uses an NYSE holiday calendar (`src/nyse_calendar.py`), and today's bar is ignored until 16:30 ET so a live intraday price is never treated as a close.
 
 ### Dashboard UX & refresh performance
 

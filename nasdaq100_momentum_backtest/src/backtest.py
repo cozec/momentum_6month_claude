@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from .config import BacktestConfig
-from .download_data import _cache_path, download_price_data
+from .download_data import _cache_path, download_price_data, load_open_prices
 from .membership import get_eligible_universe, load_nasdaq100_membership
 from .nyse_calendar import first_session_on_or_after, last_session_before
 from .signals import (
@@ -51,6 +51,9 @@ def calculate_portfolio_return(
     exit_date: pd.Timestamp,
 ) -> Tuple[float, Dict[str, float], Dict[str, float], Dict[str, float]]:
     """Return the equal-weight gross portfolio return over the holding period.
+
+    ``prices`` holds the fill prices — the open panel in the backtest, so
+    positions enter at ``entry_date``'s open and exit at ``exit_date``'s.
 
     Returns
     -------
@@ -160,6 +163,9 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         prices.shape[1],
         len(former_ends),
     )
+    # Signals use closes; trades fill at the first trading day's open (the
+    # signal is locked by the previous month's last close).
+    opens = load_open_prices(prices)
 
     monthly_returns = calculate_monthly_returns(prices)
     first_days = get_first_trading_days(prices)
@@ -222,7 +228,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         else:
             new_weights = {t: 1.0 / len(selected) for t in selected}
             gross_return, entries, exits, stock_returns = calculate_portfolio_return(
-                selected, prices, entry_date, exit_date
+                selected, opens, entry_date, exit_date
             )
 
         turnover = _compute_turnover(prior_weights, new_weights)
@@ -239,8 +245,8 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
             slippage_cost = 0.0
         net_return = gross_return - trade_cost
 
-        qqq_entry = _price_on_or_before(prices[benchmark], entry_date)
-        qqq_exit = _price_on_or_before(prices[benchmark], exit_date)
+        qqq_entry = _price_on_or_before(opens[benchmark], entry_date)
+        qqq_exit = _price_on_or_before(opens[benchmark], exit_date)
         qqq_return = (
             qqq_exit / qqq_entry - 1.0
             if qqq_entry and qqq_exit
@@ -248,8 +254,8 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         )
 
         if has_secondary:
-            tqqq_entry = _price_on_or_before(prices[secondary], entry_date)
-            tqqq_exit = _price_on_or_before(prices[secondary], exit_date)
+            tqqq_entry = _price_on_or_before(opens[secondary], entry_date)
+            tqqq_exit = _price_on_or_before(opens[secondary], exit_date)
             tqqq_return = (
                 tqqq_exit / tqqq_entry - 1.0
                 if tqqq_entry and tqqq_exit
@@ -316,7 +322,9 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
     leaderboard_entry = None
     if len(rebalance_days) >= 1:
         open_entry = rebalance_days[-1]
-        open_position = compute_open_position(prices, monthly_returns, config, open_entry)
+        open_position = compute_open_position(
+            prices, monthly_returns, config, open_entry, opens=opens
+        )
         if not open_position.empty:
             LOGGER.info(
                 "Open position (entry %s, MTD as of %s): %s",
@@ -345,6 +353,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
             prev_entry = rebalance_days[-2] if len(rebalance_days) >= 2 else None
         leaderboard = compute_leaderboard(
             prices, monthly_returns, config, board_entry, prev_entry_date=prev_entry,
+            opens=opens,
         )
         leaderboard_entry = board_entry
 
@@ -485,6 +494,7 @@ def compute_open_position(
     monthly_returns: pd.DataFrame,
     config: BacktestConfig,
     entry_date,
+    opens: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """Score and price an open (still-held) rebalance at ``entry_date``.
 
@@ -494,6 +504,9 @@ def compute_open_position(
     yet. The exit price is the most recent close available in ``prices``,
     so the per-stock return is mark-to-market (MTD) rather than the
     realized one-month return.
+
+    The entry price is ``entry_date``'s open from ``opens`` (the fill),
+    falling back to ``prices`` (closes) when ``opens`` is not given.
 
     Returns a DataFrame with the same columns as ``monthly_selections.csv``
     plus a boolean ``is_open`` flag.
@@ -507,7 +520,8 @@ def compute_open_position(
     rows = []
     for rank, ticker in enumerate(selected, start=1):
         series = prices[ticker]
-        entry_price = _price_on_or_before(series, entry_date)
+        fills = opens[ticker] if opens is not None else series
+        entry_price = _price_on_or_before(fills, entry_date)
         latest_price = _price_on_or_before(series, latest_date)
         if entry_price is None or latest_price is None or entry_price == 0:
             continue
@@ -533,13 +547,14 @@ def compute_leaderboard(
     entry_date,
     n: int = 20,
     prev_entry_date=None,
+    opens: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """Rank the top ``n`` names scored at the rebalance on ``entry_date``.
 
     The strategy only buys the top ``config.top_n`` (flagged ``held``); the
     rest of the list is context for manual review. Trend columns use the
     latest close in ``prices``: ``since_entry`` (return from the entry
-    close), ``ret_1m`` (last 21 trading days) and ``off_6m_high`` (versus the
+    fill — ``entry_date``'s open from ``opens``, else its close), ``ret_1m`` (last 21 trading days) and ``off_6m_high`` (versus the
     highest close of the last 126 trading days).
 
     With ``prev_entry_date`` (the previous rebalance) it also reports
@@ -561,7 +576,8 @@ def compute_leaderboard(
     ranks = np.arange(1, len(top) + 1)
     recent = prices[top.index].ffill()
     latest = recent.iloc[-1]
-    entry = recent.loc[:entry_date].iloc[-1]
+    fills = (opens if opens is not None else prices)[top.index].ffill()
+    entry = fills.loc[:entry_date].iloc[-1]
     return pd.DataFrame({
         "rank": ranks,
         "ticker": top.index,
