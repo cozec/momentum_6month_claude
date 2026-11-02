@@ -1,6 +1,6 @@
 # Titan-12 Momentum Rotation Summary (S&P 500)
 
-Run timestamp: 2026-11-01T22:25:00.728586+00:00
+Run timestamp: 2026-11-02T04:50:09.821249+00:00
 
 Data freshness timestamp: 2026-10-01
 
@@ -136,5 +136,5 @@ Showing the first 50 of 10,722 issues. Full list: logs/data_quality_report.csv
 
 ## Test Results
 
-`pytest -q`: 33 passed in 0.62s
+`pytest -q`: 33 passed in 0.77s
 

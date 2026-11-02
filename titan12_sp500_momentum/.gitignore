@@ -3,7 +3,9 @@ __pycache__/
 .pytest_cache/
 *.pyc
 
-data/
+data/*
+!data/sp500_membership.csv
+!data/nasdaq100_membership.csv
 outputs/
 results/
 plots/

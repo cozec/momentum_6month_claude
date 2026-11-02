@@ -2,10 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url=report.html">
-  <title>Nasdaq-100 Momentum · Report</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Momentum Reports</title>
+  <style>
+    :root { --bg: #f8fafc; --card: #ffffff; --text: #0f172a; --muted: #64748b; --border: #e2e8f0; --accent: #4f46e5; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --muted: #94a3b8; --border: #334155; --accent: #a5b4fc; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 48px 16px; }
+    h1 { font-size: 26px; margin: 0 0 6px; }
+    p.sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+    a.card { display: block; background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+             padding: 20px 22px; margin-bottom: 14px; color: inherit; text-decoration: none; }
+    a.card:hover { border-color: var(--accent); }
+    .title { font-size: 18px; font-weight: 700; }
+    .desc { color: var(--muted); font-size: 14px; margin-top: 4px; }
+    .go { color: var(--accent); font-size: 13px; font-weight: 600; margin-top: 10px; }
+  </style>
 </head>
 <body>
-  <p>Redirecting to <a href="report.html">report.html</a>…</p>
+  <main>
+    <h1>Momentum Reports</h1>
+    <p class="sub">Monthly top-3 rotation strategies · refreshed after each month's last NYSE trading day</p>
+    <a class="card" href="report.html">
+      <div class="title">Nasdaq-100 · 6-month momentum</div>
+      <div class="desc">Average of the last 6 monthly returns, point-in-time Nasdaq-100, vs QQQ &amp; TQQQ.</div>
+      <div class="go">Open report →</div>
+    </a>
+    <a class="card" href="titan12/report.html">
+      <div class="title">Titan-12 · S&amp;P 500</div>
+      <div class="desc">Weighted 12-month momentum, point-in-time S&amp;P 500, skipping the Nasdaq-100 basket's picks, vs SPY.</div>
+      <div class="go">Open report →</div>
+    </a>
+  </main>
 </body>
 </html>

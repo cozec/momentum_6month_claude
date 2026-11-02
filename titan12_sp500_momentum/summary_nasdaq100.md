@@ -1,6 +1,6 @@
 # Titan-12 Momentum Rotation Summary (Nasdaq-100)
 
-Run timestamp: 2026-10-12T03:04:18.609551+00:00
+Run timestamp: 2026-11-02T04:43:27.401908+00:00
 
 Data freshness timestamp: 2026-10-01
 
@@ -10,7 +10,7 @@ Data freshness timestamp: 2026-10-01
 | setting              | value                   |
 |:---------------------|:------------------------|
 | start_date           | 2016-01-01              |
-| end_date             | 2026-10-11              |
+| end_date             | 2026-11-01              |
 | top_n                | 3                       |
 | benchmark            | QQQ                     |
 | transaction_cost_bps | 5.0                     |
@@ -35,6 +35,17 @@ Start capital $10,000. Buy & hold uses $10,000 x (last_close / first_close) on a
 ## Latest Completed Rebalance
 
 2026-09-01: SNDK, MU, MRVL
+
+
+## Next Rebalance 2026-11-02 (signal locked 2026-10-30)
+
+Final: SNDK, MU, CRWD
+
+Baseline (pre-exclusion): SNDK, MU, CRWD
+
+Sister Nasdaq overlap exclusion is not applied to this universe.
+
+Signal uses monthly returns through the last close; the fill is the next open.
 
 ## Final Top 3
 
@@ -125,5 +136,5 @@ Showing the first 50 of 2,546 issues. Full list: logs/data_quality_report_nasdaq
 
 ## Test Results
 
-`pytest -q`: 17 passed in 0.43s
+`pytest -q`: 33 passed in 0.50s
 

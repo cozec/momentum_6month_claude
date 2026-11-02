@@ -1,0 +1,301 @@
+ticker,company_name,start_date,end_date,sector,source,notes
+AAL,American Airlines Group,2014-12-22,2020-04-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AAPL,Apple Inc.,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ABNB,Airbnb,2021-12-20,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ADBE,Adobe Inc.,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ADI,Analog Devices,2012-12-24,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ADP,Automatic Data Processing,2008-12-22,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ADSK,Autodesk,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AEOS,AEOS,2000-01-01,2007-03-08,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AEP,American Electric Power,2020-12-21,,Utilities,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AKAM,Akamai Technologies,2000-01-01,2009-12-21,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AKAM,Akamai Technologies,2010-12-20,2017-12-18,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ALGN,Align Technology,2017-10-23,2023-12-18,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ALNY,ALNY,2025-12-22,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ALTR,Altera,2000-01-01,2015-10-07,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ALXN,Alexion Pharmaceuticals,2011-04-04,2021-07-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AMAT,Applied Materials,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AMD,Advanced Micro Devices,2018-12-24,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AMGN,Amgen,2000-01-01,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AMLN,AMLN,2000-01-01,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AMZN,Amazon,2000-01-01,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ANSS,Ansys,2019-12-23,2025-07-17,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+APCC,APCC,2000-01-01,2007-02-14,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+APOL,Apollo Education Group,2000-01-01,2012-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+APP,AppLovin,2024-11-18,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ARM,ARM,2024-06-24,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ASML,ASML,2017-12-18,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ATVI,Activision Blizzard,2000-01-01,2023-07-17,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AVGO,Broadcom,2011-12-19,2016-02-01,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AVGO,Broadcom,2016-02-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AXON,Axon Enterprise,2024-12-23,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+AZN,AZN,2022-02-22,2026-01-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BBBY,Bed Bath & Beyond,2000-01-01,2016-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BEAS,BEAS,2000-01-01,2008-04-30,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BIDU,BIDU,2007-12-04,2022-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BIIB,Biogen,2000-01-01,2025-12-22,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BKNG,Booking Holdings,2000-01-01,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BKR,Baker Hughes,2022-12-19,,Energy,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BMC,BMC Software,2009-12-21,2013-07-25,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BMET,BMET,2000-01-01,2007-07-12,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BMRN,BMRN,2015-07-27,2020-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+BRCM,Broadcom Corporation,2000-01-01,2015-11-11,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CA,CA Technologies,2008-05-19,2018-11-05,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CCEP,CCEP,2023-12-18,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CDNS,Cadence Design Systems,2000-01-01,2008-12-22,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CDNS,Cadence Design Systems,2017-12-18,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CDW,CDW Corporation,2019-12-23,2021-12-20,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CDW,CDW Corporation,2023-12-18,2025-12-22,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CDWC,CDWC,2000-01-01,2007-10-08,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CEG,Constellation Energy,2022-02-02,,Utilities,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CELG,Celgene,2000-01-01,2019-11-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CEPH,Cephalon,2007-06-01,2011-07-15,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CERN,Cerner,2009-07-17,2021-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CHKP,CHKP,2000-01-01,2021-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CHRW,C.H. Robinson,2000-01-01,2015-12-21,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CHTR,Charter Communications,2013-07-25,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CKFR,CKFR,2000-01-01,2007-12-04,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CMCSA,Comcast,2000-01-01,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CMVT,CMVT,2000-01-01,2007-02-01,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+COST,Costco,2000-01-01,,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CPRT,Copart,2019-12-23,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CRWD,CrowdStrike,2021-08-26,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CSCO,Cisco,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CSGP,CoStar Group,2019-12-23,2020-07-20,Real Estate,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CSGP,CoStar Group,2022-12-19,,Real Estate,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CSX,CSX Corporation,2016-02-16,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CTAS,Cintas,2000-01-01,2010-12-20,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CTAS,Cintas,2016-12-19,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CTRP,CTRP,2010-12-20,2012-07-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CTRX,CTRX,2000-01-01,2015-07-29,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CTRX,CTRX,2012-12-24,2015-07-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CTSH,Cognizant,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+CTXS,Citrix Systems,2000-01-01,2020-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DASH,DoorDash,2023-12-18,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DDOG,Datadog,2021-12-20,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DELL,Dell Technologies,2000-01-01,2013-10-29,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DISCA,"Discovery, Inc.",2000-01-01,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DISCA,"Discovery, Inc.",2012-12-24,2017-12-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DISH,Dish Network,2000-01-01,2010-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DISH,Dish Network,2013-12-23,2018-07-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DLTR,Dollar Tree,2010-12-20,2024-11-18,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DOCU,DOCU,2020-06-22,2022-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DTV,DirecTV,2000-01-01,2015-07-27,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DTV,DirecTV,2008-04-30,2015-07-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+DXCM,Dexcom,2020-04-20,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EA,Electronic Arts,2000-01-01,2012-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EA,Electronic Arts,2014-12-22,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EBAY,eBay Inc.,2000-01-01,2023-12-18,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ENPH,Enphase Energy,2022-11-21,2023-12-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EQIX,Equinix,2012-12-24,2015-03-23,Real Estate,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ERIC,ERIC,2000-01-01,2007-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ESRX,Express Scripts,2000-01-01,2018-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EXC,Exelon,2019-11-21,,Utilities,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EXPD,Expeditors International,2000-01-01,2015-12-21,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EXPE,Expedia Group,2000-01-01,2014-12-22,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+EXPE,Expedia Group,2015-12-21,2020-12-21,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FANG,Diamondback Energy,2022-12-19,,Energy,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FAST,Fastenal,2000-01-01,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FER,FER,2025-12-22,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FFIV,"F5, Inc.",2010-12-20,2014-12-22,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FI,FI,2000-01-01,2023-06-07,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FLEX,Flex Ltd.,2000-01-01,2012-12-24,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FLIR,FLIR Systems,2008-07-21,2011-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FMCN,FMCN,2007-12-24,2009-01-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FOSL,Fossil Group,2011-12-19,2013-12-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FOX,Fox Corporation (Class B),2014-12-22,2019-03-19,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FOXA,Fox Corporation (Class A),2019-03-19,2021-12-20,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FSLR,First Solar,2008-12-22,2012-04-23,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FTNT,Fortinet,2021-12-20,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+FWLT,FWLT,2007-07-12,2010-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GEHC,GE HealthCare,2023-06-07,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GENZ,Genzyme,2000-01-01,2011-04-04,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GFS,GFS,2022-12-19,2025-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GILD,Gilead Sciences,2000-01-01,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GMCR,Keurig Green Mountain,2011-05-27,2012-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GMCR,Keurig Green Mountain,2013-08-22,2015-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GOLD,GOLD,2011-12-19,2013-11-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GOOG,Alphabet Inc. (Class C),2014-04-03,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GOOGL,Alphabet Inc. (Class A),2000-01-01,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+GRMN,Garmin,2000-01-01,2015-12-21,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+HANS,HANS,2007-12-24,2009-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+HAS,Hasbro,2016-12-19,2019-12-23,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+HOLX,Hologic,2007-12-24,2010-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+HOLX,Hologic,2016-12-19,2018-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+HON,Honeywell Technologies,2021-07-21,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+HSIC,Henry Schein,2000-01-01,2019-12-23,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+IACI,IACI,2000-01-01,2009-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+IDXX,Idexx Laboratories,2017-03-20,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ILMN,"Illumina, Inc.",2008-12-22,2011-12-19,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ILMN,"Illumina, Inc.",2013-12-23,2024-12-23,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+INCY,Incyte,2015-10-07,2021-12-20,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+INFY,INFY,2000-01-01,2012-12-12,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+INSM,INSM,2025-12-22,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+INTC,Intel,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+INTU,Intuit,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ISRG,Intuitive Surgical,2000-01-01,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+JAVA,JAVA,2000-01-01,2009-07-17,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+JBHT,J.B. Hunt,2008-12-22,2010-12-20,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+JBHT,J.B. Hunt,2017-02-07,2019-12-23,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+JD,JD,2015-07-29,2023-12-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+JNPR,Juniper Networks,2000-01-01,2009-10-29,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+JOYG,JOYG,2000-01-01,2011-12-06,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+KDP,Keurig Dr Pepper,2020-10-19,,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+KHC,Kraft Heinz,2015-07-02,,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+KLAC,KLA Corporation,2000-01-01,2016-02-16,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+KLAC,KLA Corporation,2016-12-19,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+KRFT,Kraft Foods,2013-03-18,2015-07-02,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LAMR,LAMR,2000-01-01,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LBTYA,LBTYA,2000-01-01,2009-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LBTYA,LBTYA,2012-12-24,2020-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LBTYK,LBTYK,2014-12-22,2020-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LCID,LCID,2021-12-20,2023-12-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LEAP,LEAP,2007-10-08,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LIFE,Life Technologies,2008-12-22,2013-08-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LILA,LILA,2015-07-02,2015-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LILAK,LILAK,2015-07-02,2015-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LIN,Linde plc,2024-03-18,,Materials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LLTC,Linear Technology,2000-01-01,2016-10-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LMCA,LMCA,2012-12-24,2013-01-15,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LOGI,LOGI,2007-02-01,2010-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LRCX,Lam Research,2000-01-01,2012-12-24,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LRCX,Lam Research,2014-12-22,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LULU,Lululemon Athletica,2018-12-24,2025-12-22,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+LVLT,Level 3 Communications,2000-01-01,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MAR,Marriott International,2013-11-18,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MAT,Mattel,2009-12-21,2017-10-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MCHP,Microchip Technology,2000-01-01,2013-12-23,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MCHP,Microchip Technology,2016-07-18,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MDB,MDB,2023-12-18,2025-05-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MDLZ,Mondelez International,2000-01-01,,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MEDI,MEDI,2000-01-01,2007-06-01,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MELI,MELI,2017-06-19,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+META,Meta Platforms,2000-01-01,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MICC,MICC,2000-01-01,2011-05-27,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MNST,Monster Beverage,2000-01-01,2008-11-10,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MNST,Monster Beverage,2000-01-01,,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MPWR,Monolithic Power Systems,2025-12-22,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MRNA,Moderna,2020-07-20,2024-12-23,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MRVL,Marvell Technology,2000-01-01,2012-12-24,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MRVL,Marvell Technology,2020-12-21,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MSFT,Microsoft,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MSTR,MSTR,2024-12-23,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MTCH,Match Group,2020-12-21,2022-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MU,Micron Technology,2010-12-20,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MXIM,Maxim Integrated,2008-12-22,2014-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MXIM,Maxim Integrated,2015-12-21,2021-08-26,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+MYL,MYL,2009-12-21,2019-12-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NCLH,Norwegian Cruise Line Holdings,2015-12-21,2017-12-18,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NDOI,NDOI,2000-01-01,2016-07-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NFLX,Netflix,2010-12-20,2012-12-24,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NFLX,Netflix,2013-06-06,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NIHD,NIHD,2000-01-01,2011-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NLOK,NLOK,2000-01-01,2019-12-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NLTI,NLTI,2000-01-01,2007-08-27,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NTAP,NetApp,2000-01-01,2016-12-19,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NTAP,NetApp,2018-12-24,2020-08-24,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NTES,NTES,2016-03-16,2022-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NUAN,NUAN,2011-12-19,2013-12-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NVDA,Nvidia,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NXPI,NXP Semiconductors,2013-12-23,2017-02-07,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+NXPI,NXP Semiconductors,2018-11-05,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ODFL,Old Dominion,2022-01-24,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+OKTA,OKTA,2020-12-21,2022-11-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ON,ON Semiconductor,2023-06-20,2025-12-22,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ORCL,Oracle Corporation,2000-01-01,2013-07-15,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ORLY,O'Reilly Automotive,2008-12-22,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PANW,Palo Alto Networks,2021-12-20,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PAYX,Paychex,2000-01-01,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PCAR,Paccar,2000-01-01,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PDCO,Patterson Companies,2000-01-01,2010-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PDD,PDD,2020-08-24,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PEP,PepsiCo,2018-07-23,,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PETM,PetSmart,2000-01-01,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PLTR,Palantir Technologies,2024-12-23,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PPDI,PPDI,2008-12-22,2009-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PRGO,Perrigo,2011-12-06,2013-06-06,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PTEN,PTEN,2000-01-01,2007-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PTON,PTON,2020-12-21,2022-01-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+PYPL,PayPal,2015-11-11,,Financials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+QCOM,Qualcomm,2000-01-01,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+QGEN,QGEN,2009-12-21,2011-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+QRTEA,QRTEA,2000-01-01,2018-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+REGN,Regeneron Pharmaceuticals,2012-12-24,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+RIMM,RIMM,2000-01-01,2012-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+RIVN,RIVN,2022-12-19,2023-06-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ROP,Roper Technologies,2023-12-18,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ROST,Ross Stores,2000-01-01,2007-12-24,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ROST,Ross Stores,2008-12-22,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+RYAAY,RYAAY,2007-02-14,2009-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SBAC,SBA Communications,2012-12-24,2017-03-20,Real Estate,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SBUX,Starbucks,2000-01-01,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SEPR,SEPR,2000-01-01,2007-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SGEN,SGEN,2019-12-23,2023-12-14,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SHLD,Sears Holdings,2000-01-01,2013-12-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SHOP,SHOP,2025-05-19,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SHPG,SHPG,2016-10-19,2018-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SIAL,Sigma-Aldrich,2000-01-01,2015-08-03,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SIRI,SIRI,2000-01-01,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SIRI,SIRI,2011-07-15,2024-06-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SMCI,Supermicro,2024-07-22,2024-12-23,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SNDK,Sandisk,2000-01-01,2008-12-22,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SNDK,Sandisk,2009-12-21,2016-03-16,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SNDK,Sandisk,2026-04-20,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SNPS,Synopsys,2017-12-18,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SPLK,SPLK,2000-01-01,2024-03-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SPLK,SPLK,2019-12-23,2022-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SPLS,Staples,2000-01-01,2015-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SRCL,Stericycle,2007-12-24,2016-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+STLD,Steel Dynamics,2007-12-24,2009-12-21,Materials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+STRZA,STRZA,2013-01-15,2013-03-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+STX,Seagate Technology,2008-11-10,2018-12-24,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+STX,Seagate Technology,2025-12-22,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+SWKS,Skyworks Solutions,2015-08-03,2022-12-19,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TCFCA,TCFCA,2000-01-01,2019-03-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TCFCB,TCFCB,2000-01-01,2019-03-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TCOM,TCOM,2000-01-01,2021-12-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TEAM,TEAM,2020-12-21,2026-04-20,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TEVA,TEVA,2000-01-01,2012-05-30,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TLAB,Tellabs,2000-01-01,2008-05-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TMUS,T-Mobile US,2015-12-21,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TRI,TRI,2025-07-28,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TRIP,TripAdvisor,2013-12-23,2017-04-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TSCO,Tractor Supply,2013-12-23,2017-12-18,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TSLA,"Tesla, Inc.",2013-07-15,,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TTD,The Trade Desk,2023-07-17,2025-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TTWO,Take-Two Interactive,2017-12-18,2023-12-14,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TTWO,Take-Two Interactive,2023-12-14,,Communication Services,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+TXN,Texas Instruments,2012-04-23,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+UAL,United Airlines Holdings,2018-12-24,2020-06-22,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+UAUA,UAUA,2007-03-08,2008-07-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ULTA,Ulta Beauty,2015-12-21,2020-12-21,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+URBN,Urban Outfitters,2008-12-22,2011-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VIAB,Viacom,2012-05-30,2017-12-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VIP,VIP,2013-10-29,2015-12-21,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VMED,VMED,2007-08-27,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VMED,VMED,2009-12-21,2013-06-05,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VOD,VOD,2009-12-21,2018-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VRSK,Verisk Analytics,2012-12-24,,Industrials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VRSN,Verisign,2000-01-01,2012-12-24,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VRSN,Verisign,2018-12-24,2022-12-19,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+VRTX,Vertex Pharmaceuticals,2000-01-01,,Health Care,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WBA,Walgreens Boots Alliance,2015-03-23,2024-07-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WBD,Warner Bros. Discovery,2022-12-19,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WCRX,WCRX,2008-12-22,2012-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WDAY,"Workday, Inc.",2017-12-18,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WDC,Western Digital,2012-12-24,2020-10-19,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WDC,Western Digital,2025-12-22,,Information Technology,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WFM,Whole Foods Market,2000-01-01,2016-12-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WFMI,WFMI,2000-01-01,2008-12-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WMT,Walmart,2026-01-20,,Consumer Staples,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WTW,Willis Towers Watson,2000-01-01,2020-04-30,Financials,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WYNN,Wynn Resorts,2000-01-01,2015-12-21,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+WYNN,Wynn Resorts,2017-04-24,2019-12-23,Consumer Discretionary,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+XEL,Xcel Energy,2018-11-19,,Utilities,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+XLNX,Xilinx,2000-01-01,2022-02-22,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+XMSR,XMSR,2000-01-01,2007-12-24,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+XRAY,Dentsply Sirona,2000-01-01,2013-12-23,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+XRAY,Dentsply Sirona,2000-01-01,2018-11-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+YHOO,Yahoo!,2000-01-01,2017-06-19,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ZM,ZM,2020-04-30,2023-12-18,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.
+ZS,ZS,2021-12-20,,Unknown,momentum_6m_claude/nasdaq100_momentum_backtest/data/nasdaq100_membership.csv,Point-in-time Nasdaq-100 span borrowed from the sister project.

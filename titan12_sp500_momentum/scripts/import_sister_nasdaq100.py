@@ -22,9 +22,7 @@ from src.download_data import PRICE_COLUMNS  # noqa: E402
 from src.membership import MEMBERSHIP_COLUMNS  # noqa: E402
 from src.utils import normalize_ticker  # noqa: E402
 
-DEFAULT_SISTER_ROOT = Path(
-    "/Users/adam/project/momentum_6m_claude/nasdaq100_momentum_backtest"
-)
+DEFAULT_SISTER_ROOT = PROJECT_ROOT.parent / "nasdaq100_momentum_backtest"
 
 
 def build_membership(sister_root: Path) -> pd.DataFrame:

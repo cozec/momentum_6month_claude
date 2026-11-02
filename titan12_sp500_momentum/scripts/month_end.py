@@ -1,18 +1,17 @@
 """Month-end automation: refresh, rebuild report.html, publish, email the trades.
 
-Borrowed from the sister Nasdaq project's month-end workflow, but run locally
-by launchd (``scripts/com.adam.titan12.monthend.plist``) instead of GitHub
-Actions, because the price cache is not in git and the S&P 500 overlap
-exclusion needs the sister dashboard's live ``/api/picks`` on port 8765.
-
-launchd starts it daily at 4:30 pm Pacific, after the sister's own month-end
-workflow (22:30 UTC = 2:30 pm PST / 3:30 pm PDT) has run. It does real work only from the close of the
-month's last NYSE trading day until the next rebalance (so a run missed while
-the Mac slept fires on wake), and only once per lock date. It then:
+Runs from the repo's month-end GitHub Action
+(``.github/workflows/monthly-picks-email.yml``) on the month's last NYSE
+trading day, right after the Nasdaq-100 dashboard (``../nasdaq100_momentum_backtest``)
+is up on port 8765 — the S&P 500 overlap exclusion reads its live
+``/api/picks``. With ``--email-json`` it hands the email to the Action, which
+sends one combined email; run by hand it can also publish and send itself.
+It does real work only from the close of the month's last NYSE trading day
+until the next rebalance, and only once per lock date. It then:
 
   1. starts the sister dashboard if it is down and refreshes its prices,
-  2. re-runs the S&P 500 backtest through today (prices topped up),
-  3. rebuilds ``report.html``, commits it and pushes (GitHub Pages redeploys),
+  2. re-runs the Nasdaq-100 and S&P 500 backtests through today (prices topped up),
+  3. rebuilds ``report.html``, commits it and pushes,
   4. emails the trades (sell / buy / keep) with a link to the report.
 
 Usage::
@@ -20,6 +19,7 @@ Usage::
     .venv/bin/python scripts/month_end.py                 # scheduled run
     .venv/bin/python scripts/month_end.py --dry-run --force
     .venv/bin/python scripts/month_end.py --force --skip-refresh --no-publish
+    python scripts/month_end.py --email-json ../titan12_email.json   # CI
 
 Env vars (read from the untracked ``.env`` at the project root if present):
   RESEND_API_KEY  required to send — https://resend.com
@@ -49,11 +49,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.nyse_calendar import NYSE_SESSION  # noqa: E402
 
 PYTHON = sys.executable
-SISTER_ROOT = Path("/Users/adam/project/momentum_6m_claude/nasdaq100_momentum_backtest")
+SISTER_ROOT = PROJECT_ROOT.parent / "nasdaq100_momentum_backtest"
 SISTER_PYTHON = SISTER_ROOT.parent / ".venv" / "bin" / "python"
 SISTER_URL = "http://127.0.0.1:8765"
 REPORT_PATH = PROJECT_ROOT / "report.html"
-REPORT_URL = "https://cozec.github.io/titan_12_sp500_momentum/report.html"
+REPORT_URL = "https://cozec.github.io/momentum_6month_claude/titan12/report.html"
 STATE_PATH = PROJECT_ROOT / "logs" / "month_end_state.json"
 PREVIEW_PATH = PROJECT_ROOT / "logs" / "month_end_email.html"
 NEW_YORK = ZoneInfo("America/New_York")
@@ -158,10 +158,13 @@ def run(cmd: list[str]) -> None:
 
 
 def refresh_outputs(end_date: str) -> None:
-    """Refresh sister + own prices and re-run the S&P 500 backtest."""
+    """Refresh sister + own prices and re-run the Nasdaq-100 and S&P 500 backtests."""
 
     ensure_sister()
     sister_picks(refresh=True)
+    # The report's Nasdaq-100 tab: plain Titan-12 on the sister's universe.
+    run([PYTHON, "scripts/import_sister_nasdaq100.py"])
+    run([PYTHON, "main.py", "--universe", "nasdaq100", "--end-date", end_date])
     backtest = [PYTHON, "main.py", "--end-date", end_date]
     # First pass tops up ~700 price files, which can outlast the sister cache;
     # the second pass reuses the prices with the sister cache freshly warm.
@@ -270,9 +273,7 @@ def build_email(payload: dict[str, object], test: bool = False) -> dict[str, str
         for p in nxt["picks"]
     ]
     open_rows = [[f"<b>{p['ticker']}</b>", _pct(p.get("stock_return"))] for p in held_rows]
-    html = f"""<!doctype html>
-<html><body style="font-family:'Inter',system-ui,sans-serif;background:#F8FAFC;color:#0F172A;margin:0;padding:24px">
-<div style="max-width:680px;margin:0 auto;background:white;border:1px solid #E2E8F0;border-radius:12px;padding:24px">
+    card = f"""<div style="max-width:680px;margin:0 auto;background:white;border:1px solid #E2E8F0;border-radius:12px;padding:24px">
   <div style="font-size:22px;font-weight:800;margin-bottom:4px">Titan-12 S&amp;P 500 · next month's trades</div>
   <div style="font-size:13px;color:#475569;margin-bottom:24px">
     Rebalance at the <b>open</b> on <b>{entry}</b> (the first trading day) to match the backtest's fill.
@@ -294,14 +295,17 @@ def build_email(payload: dict[str, object], test: bool = False) -> dict[str, str
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E2E8F0;font-size:11px;color:#94A3B8">
     {payload['bias_warning']} Not investment advice.
   </div>
-</div></body></html>"""
+</div>"""
+    html = f"""<!doctype html>
+<html><body style="font-family:'Inter',system-ui,sans-serif;background:#F8FAFC;color:#0F172A;margin:0;padding:24px">
+{card}</body></html>"""
 
     lines = [f"Titan-12 S&P 500 trades for {entry} (rebalance at the open)", "", f"  {line}"]
     for p in nxt["picks"]:
         lines.append(f"  next #{p['rank']} {p['ticker']:<6} last close {_price(p.get('entry_price_estimate'))}")
     lines += [f"  excluded sister Nasdaq picks: {excluded}",
               f"  current holdings month to date: {_pct(mtd)}", "", f"Full report: {REPORT_URL}"]
-    return {"subject": subject, "html": html, "text": "\n".join(lines)}
+    return {"subject": subject, "html": html, "text": "\n".join(lines), "card": card, "line": line}
 
 
 def send_via_resend(email: dict[str, str]) -> dict[str, object]:
@@ -310,7 +314,9 @@ def send_via_resend(email: dict[str, str]) -> dict[str, object]:
     body = json.dumps({
         "from": os.environ["EMAIL_FROM"],
         "to": [t.strip() for t in os.environ["EMAIL_TO"].split(",") if t.strip()],
-        **email,
+        "subject": email["subject"],
+        "html": email["html"],
+        "text": email["text"],
     }).encode()
     req = urllib.request.Request(
         "https://api.resend.com/emails",
@@ -342,6 +348,10 @@ def parse_args() -> argparse.Namespace:
                         help="Reuse the current outputs instead of re-running the backtest.")
     parser.add_argument("--no-publish", action="store_true",
                         help="Do not commit or push report.html.")
+    parser.add_argument("--email-json", type=Path, default=None,
+                        help="Write the email (subject, html, text, card, line) to this JSON "
+                             "file instead of sending it; implies --no-publish. The combined "
+                             "month-end GitHub Action folds it into one email.")
     return parser.parse_args()
 
 
@@ -361,7 +371,7 @@ def main() -> int:
             return 0
 
     missing = [k for k in ("RESEND_API_KEY", "EMAIL_FROM", "EMAIL_TO") if not os.environ.get(k)]
-    if missing and not args.dry_run:
+    if missing and not (args.dry_run or args.email_json):
         raise RuntimeError(f"missing env vars: {', '.join(missing)} (set them in .env)")
     if not args.skip_refresh:
         refresh_outputs(today.date().isoformat())
@@ -381,6 +391,10 @@ def main() -> int:
     log(f"Preview: {PREVIEW_PATH}")
     if args.dry_run:
         log("Dry run: not publishing or sending.")
+        return 0
+    if args.email_json:
+        args.email_json.write_text(json.dumps(email))
+        log(f"Email written to {args.email_json}; not publishing or sending.")
         return 0
 
     if not args.no_publish:

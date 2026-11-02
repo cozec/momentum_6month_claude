@@ -21,6 +21,9 @@ Env vars:
   REFRESH           optional — "1" forces the backend to re-download prices
   FORCE_SEND        optional — "1" sends even when the signal isn't locked today
   REPORT_URL        optional — link to the published static report
+  TITAN_EMAIL_JSON  optional — Titan-12 email written by
+                    ``../titan12_sp500_momentum/scripts/month_end.py --email-json``;
+                    its card is appended so one email covers both strategies
 
 Exit codes:
   0  email sent, or nothing to send today
@@ -59,6 +62,7 @@ FORCE_REFRESH = _env("REFRESH", "0") == "1"
 FORCE_SEND = _env("FORCE_SEND", "0") == "1"
 HTTP_TIMEOUT = int(_env("HTTP_TIMEOUT", "120"))
 REPORT_URL = _env("REPORT_URL")
+TITAN_EMAIL_JSON = _env("TITAN_EMAIL_JSON")
 
 
 def _http_get(url: str) -> bytes:
@@ -316,6 +320,17 @@ def build_email(bundle: Dict[str, Any]) -> Dict[str, str]:
     return {"subject": subject, "html": html, "text": "\n".join(lines)}
 
 
+def add_titan(email: Dict[str, str], titan: Dict[str, str]) -> Dict[str, str]:
+    """Append the Titan-12 email (card, trade line, text) to ``email``."""
+    return {
+        "subject": f"{email['subject']} | Titan-12: {titan['line']}",
+        "html": email["html"].replace(
+            "</body>", f'<div style="height:24px"></div>{titan["card"]}</body>', 1
+        ),
+        "text": f"{email['text']}\n\n{titan['text']}",
+    }
+
+
 def _send_via_resend(subject: str, html: str, text: str) -> Dict[str, Any]:
     """POST the email to Resend and return its JSON response."""
     payload = {
@@ -374,6 +389,9 @@ def main(today: Optional[str] = None) -> int:
         return 0
 
     email = build_email(bundle)
+    if TITAN_EMAIL_JSON and os.path.exists(TITAN_EMAIL_JSON):
+        with open(TITAN_EMAIL_JSON) as f:
+            email = add_titan(email, json.load(f))
     result = _send_via_resend(email["subject"], email["html"], email["text"])
     sys.stdout.write(f"Sent: {result.get('id', result)}\n")
     return 0

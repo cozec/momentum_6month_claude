@@ -5,9 +5,12 @@ name: Month-end report and picks email
 # month's last NYSE trading day — the close that locks next month's picks.
 # Cron can't express "last trading day", hence the daily window plus the
 # calendar check. Everything runs on the runner (no hosted backend):
-#   1. start the dashboard locally and refresh prices,
-#   2. snapshot it into report.html, commit, and deploy GitHub Pages,
-#   3. email the trades with a link to the report.
+#   1. start the Nasdaq-100 dashboard locally and refresh prices,
+#   2. snapshot it into report.html,
+#   3. run Titan-12 month-end (titan12_sp500_momentum/scripts/month_end.py),
+#      which reads the dashboard's live picks and rebuilds its own report,
+#   4. commit both reports, deploy GitHub Pages,
+#   5. send one email covering both strategies with links to the reports.
 # The manual trigger always runs (FORCE_SEND) for smoke tests.
 on:
   schedule:
@@ -22,9 +25,6 @@ permissions:
 concurrency:
   group: month-end
   cancel-in-progress: false
-
-env:
-  REPORT_URL: https://cozec.github.io/momentum_6month_claude/report.html
 
 jobs:
   gate:
@@ -82,11 +82,13 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: nasdaq100_momentum_backtest/requirements.txt
+          cache-dependency-path: |
+            nasdaq100_momentum_backtest/requirements.txt
+            titan12_sp500_momentum/requirements.txt
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r ../titan12_sp500_momentum/requirements.txt
           pip install playwright
           python -m playwright install --with-deps chromium
 
@@ -100,20 +102,36 @@ jobs:
       - name: Build report.html
         run: python scripts/build_report.py ../report.html
 
-      - name: Commit report
+      # Titan-12's price cache is not in git; keep it between runs.
+      - name: Restore Titan-12 price cache
+        uses: actions/cache@v4
+        with:
+          path: titan12_sp500_momentum/data/raw_prices
+          key: titan12-prices-${{ github.run_id }}
+          restore-keys: titan12-prices-
+
+      - name: Titan-12 month-end
+        working-directory: titan12_sp500_momentum
+        run: >-
+          python scripts/month_end.py
+          ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
+          --email-json ${{ github.workspace }}/titan12_email.json
+
+      - name: Commit reports
         working-directory: .
         run: |
           git config user.name "Adam Wang"
           git config user.email "yadongwang@gmail.com"
-          git add report.html
+          git add report.html titan12_sp500_momentum/report.html
           git diff --cached --quiet || git commit -m "Month-end report snapshot $(TZ=America/New_York date +%F)"
           git push
 
       - name: Stage site
         working-directory: .
         run: |
-          mkdir _site
+          mkdir -p _site/titan12
           cp index.html report.html rebalance_example.html _site/
+          cp titan12_sp500_momentum/report.html _site/titan12/
           touch _site/.nojekyll
 
       - uses: actions/upload-pages-artifact@v3
@@ -127,6 +145,8 @@ jobs:
           EMAIL_FROM:        ${{ secrets.EMAIL_FROM }}
           EMAIL_TO:          ${{ secrets.EMAIL_TO }}
           MOMENTUM_API_BASE: http://127.0.0.1:8765
+          REPORT_URL:        https://cozec.github.io/momentum_6month_claude/report.html
+          TITAN_EMAIL_JSON:  ${{ github.workspace }}/titan12_email.json
           FORCE_SEND:        ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
           PYTHONUNBUFFERED:  "1"
         run: python send_picks_email.py

@@ -421,6 +421,13 @@ class TestPicksEmail(unittest.TestCase):
         self.assertIn("market-on-close", email["html"])
         self.assertIn("—", email["html"])
 
+    def test_titan_section_appended(self):
+        titan = {"line": "buy DELL", "card": "<div>TITAN CARD</div>", "text": "Titan-12 trades"}
+        email = self.mod.add_titan(self.mod.build_email(self.bundle), titan)
+        self.assertTrue(email["subject"].endswith("| Titan-12: buy DELL"))
+        self.assertIn("<div>TITAN CARD</div></body>", email["html"])
+        self.assertTrue(email["text"].endswith("Titan-12 trades"))
+
 
 class TestIncrementalCacheAdjustment(unittest.TestCase):
     """A split between cache refreshes must not splice two price bases."""

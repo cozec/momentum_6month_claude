@@ -65,9 +65,7 @@ UNIVERSES = {
         ),
     },
 }
-DEFAULT_NASDAQ_ROOT = Path(
-    "/Users/adam/project/momentum_6m_claude/nasdaq100_momentum_backtest"
-)
+DEFAULT_NASDAQ_ROOT = PROJECT_ROOT.parent / "nasdaq100_momentum_backtest"
 NASDAQ_SELECTIONS_PATH = Path(
     os.environ.get(
         "NASDAQ_SELECTIONS_PATH",

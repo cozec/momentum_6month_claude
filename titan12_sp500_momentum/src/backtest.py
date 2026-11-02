@@ -40,8 +40,9 @@ LOGGER = logging.getLogger(__name__)
 
 # Sister Nasdaq strategy open basket, whose top picks are excluded from the
 # final S&P basket for cross-project diversification. Override with NASDAQ_OPEN_PATH.
-DEFAULT_NASDAQ_OPEN_PATH = Path(
-    "/Users/adam/project/momentum_6m_claude/nasdaq100_momentum_backtest/outputs/open_rebalance_picks.csv"
+DEFAULT_NASDAQ_OPEN_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "nasdaq100_momentum_backtest" / "outputs" / "open_rebalance_picks.csv"
 )
 
 

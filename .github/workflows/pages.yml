@@ -8,6 +8,7 @@ on:
       - index.html
       - report.html
       - rebalance_example.html
+      - titan12_sp500_momentum/report.html
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -33,11 +34,13 @@ jobs:
             index.html
             report.html
             rebalance_example.html
+            titan12_sp500_momentum/report.html
           sparse-checkout-cone-mode: false
       - name: Stage site
         run: |
-          mkdir _site
+          mkdir -p _site/titan12
           cp index.html report.html rebalance_example.html _site/
+          cp titan12_sp500_momentum/report.html _site/titan12/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
       - id: deployment

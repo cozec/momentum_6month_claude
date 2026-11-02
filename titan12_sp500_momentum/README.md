@@ -177,14 +177,19 @@ if it is offline, recent months fall back to its older CSV.
 
 ## Month-End Report and Trades Email
 
-`scripts/month_end.py` (borrowed from the sister project's month-end workflow)
-runs locally via launchd, daily at 4:30 pm PT — after the sister's own
-month-end run at 22:30 UTC. It exits unless today is between the month's last
-NYSE close and the next rebalance, and sends only once per close. When it runs it
-refreshes the sister dashboard (starting it if down), re-runs the S&P 500
-backtest through today, checks the next basket doesn't overlap the sister's,
-rebuilds `report.html`, commits and pushes it (GitHub Pages redeploys), and
-emails the sell / buy / keep trades via Resend with a link to the report.
+This project now lives inside the `momentum_6m_claude` repo next to the sister
+Nasdaq-100 project (`../nasdaq100_momentum_backtest`). One GitHub Action
+(`../.github/workflows/monthly-picks-email.yml`) handles month-end for both: on
+the month's last NYSE trading day it starts the Nasdaq-100 dashboard, then runs
+`scripts/month_end.py --email-json …`, which refreshes prices, re-runs the S&P 500
+(and Nasdaq-100) Titan-12 backtests, checks the next basket doesn't overlap the
+sister's, and rebuilds `report.html`. The Action publishes it at
+<https://cozec.github.io/momentum_6month_claude/titan12/report.html> and sends
+one email covering both strategies. The price cache (`data/raw_prices/`) is not
+in git; the Action keeps it in the Actions cache. The membership CSVs are
+tracked.
+
+To run it by hand (publishes and sends its own email):
 
 ```bash
 # untracked .env at the project root
@@ -192,15 +197,11 @@ RESEND_API_KEY=re_...
 EMAIL_FROM=onboarding@resend.dev
 EMAIL_TO=you@example.com
 
-cp scripts/com.adam.titan12.monthend.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.adam.titan12.monthend.plist
-
 .venv/bin/python scripts/month_end.py --dry-run --force          # no push, no email
 .venv/bin/python scripts/month_end.py --force --skip-refresh --no-publish  # [TEST] email
 ```
 
-Logs go to `logs/launchd.month_end.log`; the email preview to
-`logs/month_end_email.html`.
+The email preview goes to `logs/month_end_email.html`.
 
 ## Cloudflare Pages Static Deployment
 
