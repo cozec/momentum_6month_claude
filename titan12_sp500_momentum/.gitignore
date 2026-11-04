@@ -6,6 +6,9 @@ __pycache__/
 data/*
 !data/sp500_membership.csv
 !data/nasdaq100_membership.csv
+# Seed price cache: Yahoo no longer serves many delisted names, and the runner
+# tops this up from here instead of re-downloading everything.
+!data/raw_prices/
 outputs/
 results/
 plots/
