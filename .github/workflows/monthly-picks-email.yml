@@ -8,9 +8,11 @@ name: Month-end report and picks email
 #   1. start the Nasdaq-100 dashboard locally and refresh prices,
 #   2. snapshot it into report.html,
 #   3. run Titan-12 month-end (titan12_sp500_momentum/scripts/month_end.py),
-#      which reads the dashboard's live picks and rebuilds its own report,
+#      which snapshots the dashboard's picks and rebuilds its own report,
 #   4. commit both reports, deploy GitHub Pages,
 #   5. send one email covering both strategies with links to the reports.
+# A Titan-12 or publish failure must not cost the Nasdaq-100 email: the email
+# step always runs and says so when Titan-12's section is missing.
 # The manual trigger always runs (FORCE_SEND) for smoke tests.
 on:
   schedule:
@@ -53,7 +55,10 @@ jobs:
           import pandas as pd
           from src.nyse_calendar import first_session_on_or_after, last_session_before
 
-          today = pd.Timestamp(datetime.now(ZoneInfo("America/New_York")).date())
+          # The cron fires at 18:30 ET; the 6-hour offset keeps a run GitHub
+          # starts late, even past midnight, on its scheduled date.
+          now = datetime.now(ZoneInfo("America/New_York")) - pd.Timedelta(hours=6)
+          today = pd.Timestamp(now.date())
           next_entry = first_session_on_or_after(today + pd.offsets.MonthBegin(1))
           last = last_session_before(next_entry)
           run = today == last or "${{ github.event_name }}" == "workflow_dispatch"
@@ -102,15 +107,8 @@ jobs:
       - name: Build report.html
         run: python scripts/build_report.py ../report.html
 
-      # Titan-12's price cache is not in git; keep it between runs.
-      - name: Restore Titan-12 price cache
-        uses: actions/cache@v4
-        with:
-          path: titan12_sp500_momentum/data/raw_prices
-          key: titan12-prices-${{ github.run_id }}
-          restore-keys: titan12-prices-
-
       - name: Titan-12 month-end
+        continue-on-error: true
         working-directory: titan12_sp500_momentum
         run: >-
           python scripts/month_end.py
@@ -124,6 +122,8 @@ jobs:
           git config user.email "yadongwang@gmail.com"
           git add report.html titan12_sp500_momentum/report.html
           git diff --cached --quiet || git commit -m "Month-end report snapshot $(TZ=America/New_York date +%F)"
+          # Refreshed price CSVs stay uncommitted, hence the autostash.
+          git pull --rebase --autostash origin main
           git push
 
       - name: Stage site
@@ -140,6 +140,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
       - name: Send picks email
+        if: ${{ !cancelled() }}
         env:
           RESEND_API_KEY:    ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM:        ${{ secrets.EMAIL_FROM }}

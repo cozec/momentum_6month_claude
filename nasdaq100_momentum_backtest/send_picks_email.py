@@ -63,6 +63,7 @@ FORCE_SEND = _env("FORCE_SEND", "0") == "1"
 HTTP_TIMEOUT = int(_env("HTTP_TIMEOUT", "120"))
 REPORT_URL = _env("REPORT_URL")
 TITAN_EMAIL_JSON = _env("TITAN_EMAIL_JSON")
+TITAN_FAILED_NOTICE = "Titan-12 month-end failed; its trades are not in this email. Check the Action log."
 
 
 def _http_get(url: str) -> bytes:
@@ -363,6 +364,23 @@ def _send_via_resend(subject: str, html: str, text: str) -> Dict[str, Any]:
         raise
 
 
+def add_notice(email: Dict[str, str], notice: str) -> Dict[str, str]:
+    """Append a warning line to the HTML and text bodies."""
+    html = (f'<div style="max-width:680px;margin:16px auto 0;font-size:13px;color:#B91C1C">'
+            f'{notice}</div></body>')
+    return {**email,
+            "html": email["html"].replace("</body>", html, 1),
+            "text": f"{email['text']}\n\nWARNING: {notice}"}
+
+
+def add_stale_note(email: Dict[str, str], bundle: Dict[str, Any]) -> Dict[str, str]:
+    """Warn about index members left out of the ranking for lack of fresh prices."""
+    stale = sorted({t for d in bundle.get("strategies") or [] for t in d.get("stale_tickers") or []})
+    if not stale:
+        return email
+    return add_notice(email, f"No fresh prices, left out of the ranking: {', '.join(stale)}.")
+
+
 def main(today: Optional[str] = None) -> int:
     """Send the month-end trade email when today's close locked the picks."""
     missing = [
@@ -388,10 +406,12 @@ def main(today: Optional[str] = None) -> int:
         sys.stdout.write(f"{today}: next picks not locked today; nothing to send.\n")
         return 0
 
-    email = build_email(bundle)
+    email = add_stale_note(build_email(bundle), bundle)
     if TITAN_EMAIL_JSON and os.path.exists(TITAN_EMAIL_JSON):
         with open(TITAN_EMAIL_JSON) as f:
             email = add_titan(email, json.load(f))
+    elif TITAN_EMAIL_JSON:
+        email = add_notice(email, TITAN_FAILED_NOTICE)
     result = _send_via_resend(email["subject"], email["html"], email["text"])
     sys.stdout.write(f"Sent: {result.get('id', result)}\n")
     return 0

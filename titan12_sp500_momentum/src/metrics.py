@@ -25,7 +25,9 @@ def calculate_summary_stats(portfolio_returns: pd.DataFrame) -> pd.DataFrame:
     returns = pd.to_numeric(
         portfolio_returns["portfolio_return_net"], errors="coerce"
     ).dropna()
-    spy_returns = pd.to_numeric(portfolio_returns.get("spy_return"), errors="coerce")
+    # Win rate compares the strategy's open-to-open window when available.
+    spy_column = "spy_return_fill" if "spy_return_fill" in portfolio_returns else "spy_return"
+    spy_returns = pd.to_numeric(portfolio_returns.get(spy_column), errors="coerce")
     values = pd.to_numeric(portfolio_returns["portfolio_value"], errors="coerce").dropna()
     if returns.empty or values.empty:
         return pd.DataFrame()
@@ -166,7 +168,11 @@ def calculate_strategy_comparison(
             "Beta": beta,
         }
 
-    alpha, beta = _alpha_beta(returns, spy_returns)
+    # Alpha/beta regress on the same open-to-open window as the strategy.
+    fill_returns = pd.to_numeric(
+        portfolio_returns.get("spy_return_fill", portfolio_returns["spy_return"]), errors="coerce"
+    )
+    alpha, beta = _alpha_beta(returns, fill_returns)
     rows = [
         _row(
             "Titan-12 Momentum",

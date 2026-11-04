@@ -18,22 +18,6 @@ from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 
-from src.backtest import (
-    _nasdaq_excluded_from_api,
-    _nasdaq_history_from_api,
-    _read_nasdaq_excluded_tickers,
-)
-from src.config import BacktestConfig
-from src.download_data import load_cached_price_data
-from src.membership import get_eligible_universe, get_member_metadata, load_sp500_membership
-from src.signals import (
-    calculate_month_end_prices,
-    calculate_monthly_returns,
-    calculate_titan12_score,
-    prices_to_adj_close_frame,
-    rank_stocks_by_score,
-)
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 STATIC_DIR = PROJECT_ROOT / "webapp" / "static"
@@ -65,19 +49,6 @@ UNIVERSES = {
         ),
     },
 }
-DEFAULT_NASDAQ_ROOT = PROJECT_ROOT.parent / "nasdaq100_momentum_backtest"
-NASDAQ_SELECTIONS_PATH = Path(
-    os.environ.get(
-        "NASDAQ_SELECTIONS_PATH",
-        DEFAULT_NASDAQ_ROOT / "outputs" / "monthly_selections.csv",
-    )
-)
-NASDAQ_OPEN_PATH = Path(
-    os.environ.get(
-        "NASDAQ_OPEN_PATH",
-        DEFAULT_NASDAQ_ROOT / "outputs" / "open_rebalance_picks.csv",
-    )
-)
 
 
 def _safe_float(value: object) -> Optional[float]:
@@ -110,106 +81,18 @@ def _row_values(df: pd.DataFrame, date: object) -> list[dict[str, object]]:
     return rows
 
 
-def _stock_return(adj_close: pd.DataFrame, ticker: str, entry_date: object, exit_date: object) -> Optional[float]:
-    """Calculate adjusted-close return for a ticker over a holding period."""
+def _split_tickers(value: object) -> list[str]:
+    """Parse a comma-joined ``excluded_tickers`` cell; empty when blank."""
 
-    entry = pd.Timestamp(entry_date).normalize()
-    exit_ = pd.Timestamp(exit_date).normalize()
-    if ticker not in adj_close.columns or entry not in adj_close.index or exit_ not in adj_close.index:
-        return None
-    entry_price = adj_close.loc[entry, ticker]
-    exit_price = adj_close.loc[exit_, ticker]
-    if pd.isna(entry_price) or pd.isna(exit_price) or entry_price <= 0:
-        return None
-    return float(exit_price / entry_price - 1.0)
+    return [t for t in str(value).split(",") if t] if pd.notna(value) else []
 
 
-def _nasdaq_excluded_history(
-    latest_dates: list[pd.Timestamp],
-    portfolio: pd.DataFrame,
-    end_date: str = "2026-06-02",
+def _latest_open(
+    output_dir: Path = OUTPUT_DIR, name: str = "open_rebalance_picks.csv"
 ) -> list[dict[str, object]]:
-    """Build recent rebalance history after excluding same-date Nasdaq picks."""
+    """Load an open basket file written by the backtest, if present."""
 
-    # The sister dashboard is authoritative for recent months; its selections CSV
-    # lags until its own backtest re-runs, and a date missing there would silently
-    # render an unexcluded basket under the overlap-excluded heading.
-    live_history = _nasdaq_history_from_api()
-    if not NASDAQ_SELECTIONS_PATH.exists() and not live_history:
-        return []
-
-    config = BacktestConfig(end_date=end_date, use_historical_membership=True)
-    membership = load_sp500_membership(config.membership_path)
-    tickers = sorted(set(membership["ticker"].dropna().tolist() + [config.benchmark]))
-    price_data = load_cached_price_data(
-        tickers,
-        config.raw_price_dir,
-        config.start_date,
-        config.end_date,
-    )
-    adj_close = prices_to_adj_close_frame(price_data)
-    monthly_returns = calculate_monthly_returns(
-        calculate_month_end_prices(adj_close.drop(columns=[config.benchmark], errors="ignore"))
-    )
-    nasdaq_selections = (
-        pd.read_csv(NASDAQ_SELECTIONS_PATH, parse_dates=["rebalance_date"])
-        if NASDAQ_SELECTIONS_PATH.exists()
-        else pd.DataFrame(columns=["rebalance_date", "ticker"])
-    )
-
-    history: list[dict[str, object]] = []
-    for date in latest_dates:
-        date = pd.Timestamp(date).normalize()
-        portfolio_row = portfolio[portfolio["rebalance_date"].eq(date)]
-        if portfolio_row.empty:
-            continue
-        exit_date = pd.Timestamp(portfolio_row["next_rebalance_date"].iloc[0]).normalize()
-        excluded = live_history.get(date) or nasdaq_selections[
-            nasdaq_selections["rebalance_date"].eq(date)
-        ]["ticker"].astype(str).tolist()
-        metadata = get_member_metadata(membership, date)
-        eligible = get_eligible_universe(membership, date)
-        scores = calculate_titan12_score(
-            monthly_returns=monthly_returns,
-            rebalance_date=date,
-            lookback_months=config.lookback_months,
-            weights=config.weights,
-            eligible_tickers=eligible["ticker"].tolist(),
-            metadata=metadata,
-        )
-        ranked = rank_stocks_by_score(scores)
-        adjusted = ranked[~ranked["ticker"].isin(excluded)].head(config.top_n)
-        picks: list[dict[str, object]] = []
-        for _, row in adjusted.iterrows():
-            ticker = row["ticker"]
-            picks.append(
-                {
-                    "ticker": ticker,
-                    "rank": int(row["rank"]),
-                    "stock_return": _stock_return(adj_close, ticker, date, exit_date),
-                    "score": _safe_float(row.get("weighted_momentum_score")),
-                    "sector": row.get("sector", "Unknown"),
-                }
-            )
-        portfolio_return = sum(p["stock_return"] or 0 for p in picks) / max(len(picks), 1)
-        history.append(
-            {
-                "date": date.strftime("%Y-%m-%d"),
-                "label": date.strftime("%b %Y"),
-                "excluded": excluded,
-                "picks": picks,
-                "portfolio_return": portfolio_return,
-            }
-        )
-    return history
-
-
-def _latest_open(output_dir: Path = OUTPUT_DIR) -> list[dict[str, object]]:
-    """Load current open picks if the generated file exists."""
-
-    path = output_dir / "open_rebalance_picks.csv"
-    if not path.exists():
-        path = output_dir / "open_may_2026_selection.csv"
+    path = output_dir / name
     if not path.exists() or path.stat().st_size <= 1:
         return []
     open_df = pd.read_csv(path)
@@ -225,6 +108,7 @@ def _latest_open(output_dir: Path = OUTPUT_DIR) -> list[dict[str, object]]:
                 "latest_price": _safe_float(row.get("as_of_price")),
                 "stock_return": _safe_float(row.get("stock_return", row.get("mtd_return"))),
                 "score": _safe_float(row.get("weighted_momentum_score")),
+                "sector": row.get("sector", "Unknown"),
             }
         )
     return rows
@@ -252,7 +136,7 @@ def _next_picks(output_dir: Path, excludes_sister: bool) -> dict[str, object]:
         }
         for _, row in next_df.iterrows()
     ]
-    excluded = _nasdaq_excluded_from_api(3, basket="next") if excludes_sister else []
+    excluded = _split_tickers(next_df["excluded_tickers"].iloc[0]) if excludes_sister else []
     return {
         "picks": picks,
         "date": next_df["rebalance_date"].iloc[0],
@@ -291,82 +175,14 @@ def _top20(output_dir: Path) -> dict[str, object]:
     }
 
 
-def _nasdaq_excluded_open() -> dict[str, object]:
-    """Return current Nasdaq overlap exclusions and adjusted S&P picks."""
+def _nasdaq_excluded_open(output_dir: Path) -> dict[str, object]:
+    """Return the overlap-excluded open basket the backtest wrote, with its exclusions."""
 
-    open_picks = _latest_open()
-    open_date = pd.Timestamp(open_picks[0]["date"]).normalize() if open_picks else None
-    # Prefer the sister strategy's live open basket (recomputed each request),
-    # which is fresher than its on-disk CSV. Falls back to CSV when offline.
-    excluded: list[str] = _read_nasdaq_excluded_tickers(3)
-    if excluded:
-        pass
-    elif NASDAQ_OPEN_PATH.exists():
-        ndx_open = pd.read_csv(NASDAQ_OPEN_PATH)
-        excluded = ndx_open.sort_values("rank")["ticker"].astype(str).tolist()
-    elif NASDAQ_SELECTIONS_PATH.exists() and open_date is not None:
-        ndx_selections = pd.read_csv(NASDAQ_SELECTIONS_PATH, parse_dates=["rebalance_date"])
-        dates = sorted(
-            date
-            for date in ndx_selections["rebalance_date"].dropna().unique()
-            if pd.Timestamp(date).normalize() <= open_date
-        )
-        if dates:
-            latest_date = dates[-1]
-            excluded = (
-                ndx_selections[ndx_selections["rebalance_date"].eq(latest_date)]
-                .sort_values("rank")["ticker"]
-                .astype(str)
-                .tolist()
-            )
-    if not excluded:
-        return {"excluded": excluded, "adjusted": open_picks}
-    if not open_picks:
-        return {"excluded": excluded, "adjusted": []}
-
-    open_date = pd.Timestamp(open_picks[0]["date"]).normalize()
-    as_of_date = pd.Timestamp(open_picks[0]["as_of"]).normalize()
-    config = BacktestConfig(
-        end_date=as_of_date.strftime("%Y-%m-%d"),
-        use_historical_membership=True,
+    adjusted = _latest_open(output_dir, "final_rebalance_picks.csv")
+    path = output_dir / "final_rebalance_picks.csv"
+    excluded = (
+        _split_tickers(pd.read_csv(path)["excluded_tickers"].iloc[0]) if adjusted else []
     )
-    membership = load_sp500_membership(config.membership_path)
-    tickers = sorted(set(membership["ticker"].dropna().tolist() + [config.benchmark]))
-    price_data = load_cached_price_data(
-        tickers,
-        config.raw_price_dir,
-        config.start_date,
-        config.end_date,
-    )
-    adj_close = prices_to_adj_close_frame(price_data)
-    monthly_returns = calculate_monthly_returns(
-        calculate_month_end_prices(adj_close.drop(columns=[config.benchmark], errors="ignore"))
-    )
-    metadata = get_member_metadata(membership, open_date)
-    eligible = get_eligible_universe(membership, open_date)
-    scores = calculate_titan12_score(
-        monthly_returns=monthly_returns,
-        rebalance_date=open_date,
-        lookback_months=config.lookback_months,
-        weights=config.weights,
-        eligible_tickers=eligible["ticker"].tolist(),
-        metadata=metadata,
-    )
-    ranked = rank_stocks_by_score(scores)
-    adjusted = []
-    for _, row in ranked[~ranked["ticker"].isin(excluded)].head(config.top_n).iterrows():
-        ticker = row["ticker"]
-        adjusted.append(
-            {
-                "ticker": ticker,
-                "rank": int(row["rank"]),
-                "date": open_date.strftime("%Y-%m-%d"),
-                "as_of": as_of_date.strftime("%Y-%m-%d"),
-                "stock_return": _stock_return(adj_close, ticker, open_date, as_of_date),
-                "score": _safe_float(row.get("weighted_momentum_score")),
-                "sector": row.get("sector", "Unknown"),
-            }
-        )
     return {"excluded": excluded, "adjusted": adjusted}
 
 
@@ -390,12 +206,17 @@ def build_dashboard_payload(universe: str = "sp500") -> dict[str, object]:
         open_return = sum(p["stock_return"] or 0 for p in open_picks) / len(open_picks)
     # The current open basket's as-of date is the latest trading day priced in,
     # so it doubles as the true data-freshness marker for the dashboard.
-    data_freshness = open_picks[0]["as_of"] if open_picks else "2026-05-15"
+    data_freshness = open_picks[0]["as_of"] if open_picks else None
 
-    baseline_recent = []
+    recent_portfolio = portfolio[portfolio["rebalance_date"].isin(latest_dates)]
+    excluded_by_date = {
+        row["rebalance_date"]: _split_tickers(row.get("excluded_tickers"))
+        for _, row in recent_portfolio.iterrows()
+    }
+    recent = []
     for date in latest_dates:
         picks = _row_values(selections, date)
-        baseline_recent.append(
+        recent.append(
             {
                 "date": pd.Timestamp(date).strftime("%Y-%m-%d"),
                 "label": pd.Timestamp(date).strftime("%b %Y"),
@@ -403,19 +224,16 @@ def build_dashboard_payload(universe: str = "sp500") -> dict[str, object]:
                 "portfolio_return": sum(p["stock_return"] or 0 for p in picks) / max(len(picks), 1),
             }
         )
-    recent = baseline_recent
+        if settings["excludes_sister"]:
+            recent[-1]["excluded"] = excluded_by_date.get(date, [])
     overlay = {"excluded": [], "adjusted": open_picks}
     if settings["excludes_sister"]:
-        recent = (
-            _nasdaq_excluded_history(latest_dates, portfolio, end_date=data_freshness)
-            or baseline_recent
-        )
-        overlay = _nasdaq_excluded_open()
-
-    recent_portfolio = portfolio[portfolio["rebalance_date"].isin(latest_dates)]
+        overlay = _nasdaq_excluded_open(output_dir)
+    # Label what was actually applied, not what was configured.
+    all_excluded = settings["excludes_sister"] and all(r["excluded"] for r in recent)
 
     return {
-        "computed_at": pd.Timestamp.now().isoformat(timespec="seconds"),
+        "computed_at": pd.Timestamp.now(tz="UTC").isoformat(timespec="seconds"),
         "data_freshness": data_freshness,
         "universe": {
             "id": universe,
@@ -440,7 +258,7 @@ def build_dashboard_payload(universe: str = "sp500") -> dict[str, object]:
             "months": len(recent),
             "strategy_return": _safe_float(pd.Series([r["portfolio_return"] for r in recent]).add(1).prod() - 1),
             "spy_return": _safe_float((1 + recent_portfolio["spy_return"]).prod() - 1),
-            "mode": "Nasdaq-overlap-excluded" if settings["excludes_sister"] else "Baseline",
+            "mode": "Nasdaq-overlap-excluded" if all_excluded else "Baseline",
         },
         "open": {
             "picks": open_picks,

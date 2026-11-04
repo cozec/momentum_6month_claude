@@ -12,6 +12,7 @@ MONTHS_PER_YEAR = 12
 
 
 def _series_from(df: pd.DataFrame, col: str) -> pd.Series:
+    """Return ``df[col]`` as a float Series."""
     return df.set_index("rebalance_date")[col].astype(float)
 
 
@@ -79,11 +80,19 @@ def calculate_summary_stats(
         _stats(tqqq_returns, "tqqq_value") if has_tqqq else None
     )
 
+    # Win rates compare like with like: the *_return_fill columns cover the
+    # strategy's open-to-open window (B&H stats above stay close-based).
+    qqq_compare = (
+        _series_from(df, "qqq_return_fill") if "qqq_return_fill" in df.columns else qqq_returns
+    )
+    tqqq_compare = (
+        _series_from(df, "tqqq_return_fill") if "tqqq_return_fill" in df.columns else tqqq_returns
+    )
     win_rate_qqq = (
-        float((net_returns > qqq_returns).mean()) if len(net_returns) else np.nan
+        float((net_returns > qqq_compare).mean()) if len(net_returns) else np.nan
     )
     win_rate_tqqq = (
-        float((net_returns > tqqq_returns).mean())
+        float((net_returns > tqqq_compare).mean())
         if has_tqqq and len(net_returns)
         else np.nan
     )

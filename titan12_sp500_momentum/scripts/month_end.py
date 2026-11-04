@@ -3,16 +3,16 @@
 Runs from the repo's month-end GitHub Action
 (``.github/workflows/monthly-picks-email.yml``) on the month's last NYSE
 trading day, right after the Nasdaq-100 dashboard (``../nasdaq100_momentum_backtest``)
-is up on port 8765 — the S&P 500 overlap exclusion reads its live
-``/api/picks``. With ``--email-json`` it hands the email to the Action, which
-sends one combined email; run by hand it can also publish and send itself.
-It does real work only from the close of the month's last NYSE trading day
-until the next rebalance, and only once per lock date. It then:
+is up on port 8765 — the S&P 500 overlap exclusion reads its ``/api/picks``,
+snapshotted once per run. With ``--email-json`` it hands the email to the Action,
+which commits the report and sends one combined email; run by hand it publishes
+and sends itself. It does real work only from the close of the month's last NYSE
+trading day until the next rebalance, and only once per lock date. It then:
 
-  1. starts the sister dashboard if it is down and refreshes its prices,
-  2. re-runs the Nasdaq-100 and S&P 500 backtests through today (prices topped up),
-  3. rebuilds ``report.html``, commits it and pushes,
-  4. emails the trades (sell / buy / keep) with a link to the report.
+  1. starts the sister dashboard if it is down and snapshots its refreshed picks,
+  2. re-runs the S&P 500 backtest through today (prices topped up),
+  3. rebuilds ``report.html`` (by hand: commits it and pushes),
+  4. emails the trades (sell / buy / keep), or writes them for the Action.
 
 Usage::
 
@@ -50,17 +50,20 @@ from src.nyse_calendar import NYSE_SESSION  # noqa: E402
 
 PYTHON = sys.executable
 SISTER_ROOT = PROJECT_ROOT.parent / "nasdaq100_momentum_backtest"
-SISTER_PYTHON = SISTER_ROOT.parent / ".venv" / "bin" / "python"
+# Repo-root .venv locally; the runner has no venv and installs into its Python.
+_ROOT_VENV_PYTHON = SISTER_ROOT.parent / ".venv" / "bin" / "python"
+SISTER_PYTHON = _ROOT_VENV_PYTHON if _ROOT_VENV_PYTHON.exists() else Path(PYTHON)
 SISTER_URL = "http://127.0.0.1:8765"
 REPORT_PATH = PROJECT_ROOT / "report.html"
 REPORT_URL = "https://cozec.github.io/momentum_6month_claude/titan12/report.html"
+SISTER_SNAPSHOT_PATH = PROJECT_ROOT / "logs" / "sister_picks.json"
 STATE_PATH = PROJECT_ROOT / "logs" / "month_end_state.json"
 PREVIEW_PATH = PROJECT_ROOT / "logs" / "month_end_email.html"
 NEW_YORK = ZoneInfo("America/New_York")
 
 
 def log(message: str) -> None:
-    """Print a timestamped progress line (launchd captures stdout)."""
+    """Print a timestamped progress line."""
 
     print(f"{datetime.now(NEW_YORK):%Y-%m-%d %H:%M:%S %Z} {message}", flush=True)
 
@@ -139,15 +142,18 @@ def ensure_sister() -> None:
     raise RuntimeError("sister dashboard did not start")
 
 
-def sister_picks(refresh: bool = False) -> dict[str, object]:
-    """Fetch the sister's baskets, which also warms its 5-minute cache.
+def snapshot_sister() -> dict[str, object]:
+    """Fetch the sister's refreshed baskets once and point this run at the copy.
 
-    The S&P backtest reads ``/api/picks`` with a 4 s timeout, shorter than an
-    uncached sister compute, so callers warm it right before the backtest.
+    Subprocesses inherit ``NASDAQ_PICKS_FILE``, so the backtest reads this file
+    instead of a live endpoint whose cache can expire mid-run.
     """
 
-    qs = "?refresh=true" if refresh else ""
-    return http_get_json(f"{SISTER_URL}/api/picks{qs}", timeout=900)
+    picks = http_get_json(f"{SISTER_URL}/api/picks?refresh=true&history=240", timeout=900)
+    SISTER_SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SISTER_SNAPSHOT_PATH.write_text(json.dumps(picks))
+    os.environ["NASDAQ_PICKS_FILE"] = str(SISTER_SNAPSHOT_PATH)
+    return picks
 
 
 def run(cmd: list[str]) -> None:
@@ -157,27 +163,22 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=PROJECT_ROOT, check=True)  # noqa: S603
 
 
-def refresh_outputs(end_date: str) -> None:
-    """Refresh sister + own prices and re-run the Nasdaq-100 and S&P 500 backtests."""
+def refresh_outputs(end_date: str) -> dict[str, object]:
+    """Snapshot the sister's picks and re-run the S&P 500 backtest; return the snapshot."""
 
     ensure_sister()
-    sister_picks(refresh=True)
-    # The report's Nasdaq-100 tab: plain Titan-12 on the sister's universe.
-    run([PYTHON, "scripts/import_sister_nasdaq100.py"])
-    run([PYTHON, "main.py", "--universe", "nasdaq100", "--end-date", end_date])
-    backtest = [PYTHON, "main.py", "--end-date", end_date]
-    # First pass tops up ~700 price files, which can outlast the sister cache;
-    # the second pass reuses the prices with the sister cache freshly warm.
-    run(backtest)
-    sister_picks()
-    run(backtest)
+    picks = snapshot_sister()
+    run([PYTHON, "main.py", "--end-date", end_date])
+    return picks
 
 
-def check_overlap(payload: dict[str, object]) -> None:
-    """Fail if the next basket shares a ticker with the sister's next basket."""
+def check_overlap(payload: dict[str, object], sister: dict[str, object]) -> None:
+    """Fail if the exclusion is missing or the next baskets share a ticker."""
 
-    sister_next = {p["ticker"] for p in sister_picks().get("next") or []}
+    sister_next = {p["ticker"] for p in sister.get("next") or []}
     ours = {p["ticker"] for p in payload["next"]["picks"]}
+    if ours and not sister_next:
+        raise RuntimeError("sister next basket unavailable; cannot apply the overlap exclusion")
     if sister_next & ours:
         raise RuntimeError(f"next picks overlap the sister basket: {sorted(sister_next & ours)}")
 
@@ -252,7 +253,8 @@ def build_email(payload: dict[str, object], test: bool = False) -> dict[str, str
     held_rows = payload["nasdaq_overlay"]["adjusted"]
     nxt = payload["next"]
     held = [p["ticker"] for p in held_rows]
-    t = trades(held, [p["ticker"] for p in nxt["picks"]])
+    # Before the signal locks (forced test runs) there is nothing to trade yet.
+    t = trades(held, [p["ticker"] for p in nxt["picks"]]) if nxt["picks"] else trades(held, held)
     entry = nxt["date"] or "—"
     line = "; ".join(f"{k} {', '.join(v)}" for k, v in t.items() if v) or "no change"
     subject = f"{'[TEST] ' if test else ''}Titan-12 S&P 500 trades for {entry} — {line}"
@@ -373,16 +375,15 @@ def main() -> int:
     missing = [k for k in ("RESEND_API_KEY", "EMAIL_FROM", "EMAIL_TO") if not os.environ.get(k)]
     if missing and not (args.dry_run or args.email_json):
         raise RuntimeError(f"missing env vars: {', '.join(missing)} (set them in .env)")
-    if not args.skip_refresh:
-        refresh_outputs(today.date().isoformat())
+    sister = None if args.skip_refresh else refresh_outputs(today.date().isoformat())
 
     from run_webapp import build_dashboard_payload  # after the backtest rewrote outputs
 
     payload = build_dashboard_payload()
     if not args.force and payload["next"]["as_of"] != lock:
         raise RuntimeError(f"next picks locked {payload['next']['as_of']}, expected {lock}")
-    if not args.skip_refresh:
-        check_overlap(payload)
+    if sister is not None:
+        check_overlap(payload, sister)
 
     run([PYTHON, "scripts/export_static_dashboard.py", "--report", str(REPORT_PATH)])
     email = build_email(payload, test=args.force)

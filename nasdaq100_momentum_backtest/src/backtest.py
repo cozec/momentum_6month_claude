@@ -28,6 +28,7 @@ from .nyse_calendar import first_session_on_or_after, last_session_before
 from .signals import (
     calculate_momentum_scores,
     calculate_monthly_returns,
+    find_stale_tickers,
     get_first_trading_days,
     select_top_n,
 )
@@ -163,6 +164,10 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         prices.shape[1],
         len(former_ends),
     )
+    # A session counts once the benchmark has settled; a few names can post a
+    # close before the rest, which must not read as the latest date for all.
+    settled = prices[benchmark].notna()
+    prices, opens = prices.loc[settled], opens.loc[settled]
     # Signals use closes; trades fill at the first trading day's open (the
     # signal is locked by the previous month's last close). The buy-and-hold
     # benchmarks stay on closes so their final value is last/first close.
@@ -205,7 +210,11 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         entry_date = rebalance_days[i]
         exit_date = rebalance_days[i + 1]
 
-        available = [t for t in prices.columns if t not in excluded_from_universe]
+        stale = set(find_stale_tickers(prices, entry_date))
+        available = [
+            t for t in prices.columns
+            if t not in excluded_from_universe and t not in stale
+        ]
         eligible = get_eligible_universe(
             membership_df, entry_date, available_tickers=available
         )
@@ -252,6 +261,14 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
             if qqq_entry and qqq_exit
             else 0.0
         )
+        # Same open-to-open window as the strategy, for per-period comparisons.
+        qqq_fill_entry = _price_on_or_before(opens[benchmark], entry_date)
+        qqq_fill_exit = _price_on_or_before(opens[benchmark], exit_date)
+        qqq_return_fill = (
+            qqq_fill_exit / qqq_fill_entry - 1.0
+            if qqq_fill_entry and qqq_fill_exit
+            else 0.0
+        )
 
         if has_secondary:
             tqqq_entry = _price_on_or_before(prices[secondary], entry_date)
@@ -261,8 +278,16 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
                 if tqqq_entry and tqqq_exit
                 else 0.0
             )
+            tqqq_fill_entry = _price_on_or_before(opens[secondary], entry_date)
+            tqqq_fill_exit = _price_on_or_before(opens[secondary], exit_date)
+            tqqq_return_fill = (
+                tqqq_fill_exit / tqqq_fill_entry - 1.0
+                if tqqq_fill_entry and tqqq_fill_exit
+                else 0.0
+            )
         else:
             tqqq_return = float("nan")
+            tqqq_return_fill = float("nan")
 
         portfolio_value *= 1.0 + net_return
         qqq_value *= 1.0 + qqq_return
@@ -294,9 +319,11 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
                 "portfolio_return_net": net_return,
                 "qqq_return": qqq_return,
                 "tqqq_return": tqqq_return,
-                "excess_return": net_return - qqq_return,
-                "excess_return_vs_tqqq": net_return - tqqq_return
-                if not np.isnan(tqqq_return)
+                "qqq_return_fill": qqq_return_fill,
+                "tqqq_return_fill": tqqq_return_fill,
+                "excess_return": net_return - qqq_return_fill,
+                "excess_return_vs_tqqq": net_return - tqqq_return_fill
+                if not np.isnan(tqqq_return_fill)
                 else np.nan,
                 "portfolio_value": portfolio_value,
                 "qqq_value": qqq_value,
@@ -320,6 +347,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
     next_position = pd.DataFrame()
     leaderboard = pd.DataFrame()
     leaderboard_entry = None
+    stale_members: List[str] = []
     if len(rebalance_days) >= 1:
         open_entry = rebalance_days[-1]
         open_position = compute_open_position(
@@ -356,6 +384,13 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
             opens=opens,
         )
         leaderboard_entry = board_entry
+        stale_members = _stale_members(prices, config, board_entry)
+        if stale_members:
+            LOGGER.warning(
+                "Stale prices, not tradable at %s: %s",
+                board_entry.date(),
+                ", ".join(stale_members),
+            )
 
     return {
         "selections": selections,
@@ -366,6 +401,7 @@ def run_backtest(config: BacktestConfig) -> Dict[str, pd.DataFrame]:
         "next_position": next_position,
         "leaderboard": leaderboard,
         "leaderboard_entry": leaderboard_entry,
+        "stale_tickers": stale_members,
     }
 
 
@@ -403,7 +439,8 @@ def _score_at(
     excluded = {benchmark}
     if secondary:
         excluded.add(secondary)
-    available = [t for t in prices.columns if t not in excluded]
+    stale = set(find_stale_tickers(prices, asof))
+    available = [t for t in prices.columns if t not in excluded and t not in stale]
     membership_df = _build_membership(config)
     eligible = get_eligible_universe(
         membership_df, asof, available_tickers=available
@@ -416,6 +453,16 @@ def _score_at(
     )
     selected = select_top_n(scores, n=config.top_n)
     return selected, scores
+
+
+def _stale_members(
+    prices: pd.DataFrame, config: BacktestConfig, asof: pd.Timestamp
+) -> List[str]:
+    """Index members at ``asof`` whose stale prices keep them out of the ranking."""
+    stale = find_stale_tickers(prices, asof)
+    return get_eligible_universe(
+        _build_membership(config), asof, available_tickers=stale
+    )
 
 
 def _signal_locked_for_next_entry(
@@ -595,6 +642,6 @@ def compute_leaderboard(
         "entry_price": entry.values,
         "latest_price": latest.values,
         "since_entry": (latest / entry - 1.0).values,
-        "ret_1m": (latest / recent.iloc[-22] - 1.0).values,
+        "ret_1m": (latest / recent.iloc[-min(22, len(recent))] - 1.0).values,
         "off_6m_high": (latest / recent.iloc[-126:].max() - 1.0).values,
     })

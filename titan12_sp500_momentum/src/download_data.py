@@ -16,6 +16,7 @@ PRICE_COLUMNS = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
 # A refresh whose history starts this much later than the cached file is
 # treated as truncated (e.g. a post-merger stub) and the cache is kept.
 REFRESH_TRUNCATION_TOLERANCE = pd.Timedelta(days=30)
+SESSION_SETTLED = pd.Timedelta(hours=16, minutes=30)
 
 
 def price_cache_path(raw_price_dir: Path, ticker: str) -> Path:
@@ -23,6 +24,21 @@ def price_cache_path(raw_price_dir: Path, ticker: str) -> Path:
 
     safe_ticker = normalize_ticker(ticker).replace("^", "")
     return raw_price_dir / f"{safe_ticker}.csv"
+
+
+def _drop_unsettled_bar(
+    prices: pd.DataFrame, now: pd.Timestamp | None = None
+) -> pd.DataFrame:
+    """Drop today's bar until the close settles at 16:30 New York time.
+
+    A live quote must not be cached or scored as a close. ``now`` is the current
+    New York time; it defaults to the clock.
+    """
+
+    now = now if now is not None else pd.Timestamp.now(tz="America/New_York")
+    if now - now.normalize() >= SESSION_SETTLED:
+        return prices
+    return prices.loc[prices.index < now.tz_localize(None).normalize()]
 
 
 def _clean_downloaded_prices(prices: pd.DataFrame) -> pd.DataFrame:
@@ -39,7 +55,20 @@ def _clean_downloaded_prices(prices: pd.DataFrame) -> pd.DataFrame:
     for column in PRICE_COLUMNS:
         if column not in prices.columns:
             prices[column] = pd.NA
-    return prices[PRICE_COLUMNS].dropna(how="all")
+    # Yahoo returns the running session with a blank close until it settles.
+    prices = prices[PRICE_COLUMNS].dropna(subset=["Close", "Adj Close"])
+    return _drop_unsettled_bar(prices)
+
+
+def _adjustment_changed(
+    cached: pd.DataFrame, fresh: pd.DataFrame, overlap: pd.Timestamp
+) -> bool:
+    """True when the overlap day's adjusted close moved beyond rounding (0.1%)."""
+
+    if overlap not in fresh.index or overlap not in cached.index:
+        return False
+    old, new = cached.loc[overlap, "Adj Close"], fresh.loc[overlap, "Adj Close"]
+    return bool(pd.notna(old) and pd.notna(new) and old > 0 and abs(new / old - 1.0) > 0.001)
 
 
 def _download_ticker_history(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -117,7 +146,29 @@ def download_price_data(
                     fresh_tail = _download_ticker_history(
                         ticker, last_cached.date().isoformat(), end_date
                     )
-                    if not fresh_tail.empty:
+                    if _adjustment_changed(cached, fresh_tail, last_cached):
+                        # A split or dividend re-based Yahoo's history: a tail merge
+                        # would splice two bases, so take the full series unless
+                        # it is a stub (delisted names keep their cached history).
+                        LOGGER.info("Adjustment changed for %s; redownloading.", ticker)
+                        full = _download_ticker_history(
+                            ticker, min(cached.index.min(), start).date().isoformat(), end_date
+                        )
+                        if (
+                            not full.empty
+                            and full.index.min()
+                            <= cached.index.min() + REFRESH_TRUNCATION_TOLERANCE
+                        ):
+                            full.to_csv(cache_path)
+                            cached = full
+                        else:
+                            append_quality_issue(
+                                issues,
+                                ticker,
+                                "adjustment_splice_kept_cache",
+                                "Adjustment changed but the redownload was truncated.",
+                            )
+                    elif not fresh_tail.empty:
                         combined = pd.concat([cached, fresh_tail])
                         combined = combined[~combined.index.duplicated(keep="last")].sort_index()
                         combined.to_csv(cache_path)

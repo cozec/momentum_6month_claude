@@ -135,7 +135,7 @@ function renderStats(data) {
   `;
   document.getElementById('stats-grid').innerHTML = [
     card('CAGR', fmtPct(stats.cagr), `${bench} value ${fmtMoney(stats.spy_value)}`),
-    card('Final value', fmtMoney(stats.final_value), 'from $100,000 initial capital'),
+    card('Final value', fmtMoney(stats.final_value), 'from $10,000 initial capital'),
     card('Max drawdown', fmtPct(stats.max_drawdown), `Sharpe ${(stats.sharpe ?? 0).toFixed(2)}`),
     card(`Win vs ${bench}`, fmtPct(stats.win_rate_vs_spy), `Turnover ${fmtPct(stats.average_turnover)}/mo`),
   ].join('');

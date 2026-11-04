@@ -9,7 +9,8 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-# Exception: ship a seed price cache for fast cold-starts on Render.
+# Exception: seed price cache. The runner tops it up from here; it is not
+# re-committed monthly, so each run fetches the tail since this commit.
 !data/raw_prices/
 !data/raw_prices/*.csv
 !data/nasdaq100_membership.csv

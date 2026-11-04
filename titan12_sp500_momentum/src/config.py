@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 
@@ -14,7 +15,7 @@ class BacktestConfig:
     """Runtime configuration for a Titan-12 backtest."""
 
     start_date: str = "2016-01-01"
-    end_date: str = "2026-05-12"
+    end_date: str = date.today().isoformat()
     universe: str = "sp500"
     benchmark: str = "SPY"
     top_n: int = 3
@@ -23,7 +24,7 @@ class BacktestConfig:
         default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     )
     rebalance_frequency: str = "monthly"
-    initial_capital: float = 100000.0
+    initial_capital: float = 10000.0
     transaction_cost_bps: float = 5.0
     slippage_bps: float = 5.0
     use_historical_membership: bool = True

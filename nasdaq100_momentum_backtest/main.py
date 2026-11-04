@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from dataclasses import asdict
+from datetime import date
 
 import pandas as pd
 
@@ -22,11 +23,12 @@ LOGGER = get_logger("main")
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the backtest's command-line options."""
     parser = argparse.ArgumentParser(
         description="Backtest a Nasdaq-100 monthly 6-month momentum strategy."
     )
     parser.add_argument("--start-date", default="2016-01-01")
-    parser.add_argument("--end-date", default="2026-05-12")
+    parser.add_argument("--end-date", default=date.today().isoformat())
     parser.add_argument("--top-n", type=int, default=3)
     parser.add_argument("--lookback-months", type=int, default=6)
     parser.add_argument("--benchmark", default="QQQ")
@@ -66,6 +68,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Run the backtest and write its outputs and charts."""
     args = parse_args()
     config = BacktestConfig(
         start_date=args.start_date,

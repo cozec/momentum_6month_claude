@@ -28,6 +28,33 @@ def prices_to_adj_close_frame(price_data: dict[str, pd.DataFrame]) -> pd.DataFra
     return frame
 
 
+def prices_to_fill_frame(
+    price_data: dict[str, pd.DataFrame], adj_close: pd.DataFrame
+) -> pd.DataFrame:
+    """Build the fill-price panel: adjusted opens on ``adj_close``'s axes.
+
+    Cached ``Open`` is unadjusted, so it is scaled by that day's
+    ``Adj Close / Close`` to sit on the same basis as the signal prices. A
+    missing or non-positive open falls back to the previous adjusted close (the
+    last price known at decision time), or that day's on a ticker's first bar.
+    """
+
+    series = {}
+    for ticker, prices in price_data.items():
+        if ticker in adj_close.columns and {"Open", "Close"} <= set(prices.columns):
+            factor = prices["Adj Close"] / prices["Close"]
+            series[ticker] = (prices["Open"] * factor).rename(ticker)
+    fills = pd.DataFrame(series).reindex(index=adj_close.index, columns=adj_close.columns)
+    present = adj_close.notna()
+    substituted = int((~(fills > 0) & present).sum().sum())
+    fills = fills.where(fills > 0)
+    fills = fills.fillna(adj_close.ffill().shift(1).where(present))
+    fills = fills.fillna(adj_close)
+    if substituted:
+        LOGGER.warning("Replaced %d missing/non-positive opens with the prior close.", substituted)
+    return fills
+
+
 def get_first_trading_days(price_df: pd.DataFrame) -> list[pd.Timestamp]:
     """Return the first available trading day for each month in a price frame."""
 

@@ -31,6 +31,7 @@ from .membership import get_eligible_universe
 from .signals import (
     calculate_momentum_scores,
     calculate_monthly_returns,
+    find_stale_tickers,
     get_first_trading_days,
     select_top_n,
 )
@@ -63,11 +64,14 @@ def _strategy_returns(
     indexed by entry date. Signals use ``prices`` (closes); trades fill at
     the rebalance day's open from ``opens``.
     """
-    available = [t for t in prices.columns if t not in excluded_tickers]
     pairs = []
     for i in range(len(rebalance_days) - 1):
         entry = rebalance_days[i]
         exit_ = rebalance_days[i + 1]
+        stale = set(find_stale_tickers(prices, entry))
+        available = [
+            t for t in prices.columns if t not in excluded_tickers and t not in stale
+        ]
         eligible = get_eligible_universe(
             membership_df, entry, available_tickers=available
         )

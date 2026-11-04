@@ -1,8 +1,8 @@
 # Titan-12 Momentum Rotation Summary (S&P 500)
 
-Run timestamp: 2026-11-02T04:50:09.821249+00:00
+Run timestamp: 2026-11-04T01:37:30.448545+00:00
 
-Data freshness timestamp: 2026-10-01
+Data freshness timestamp: 2026-11-02
 
 
 ## Active Configuration
@@ -10,7 +10,7 @@ Data freshness timestamp: 2026-10-01
 | setting              | value                   |
 |:---------------------|:------------------------|
 | start_date           | 2016-01-01              |
-| end_date             | 2026-11-01              |
+| end_date             | 2026-11-03              |
 | top_n                | 3                       |
 | benchmark            | SPY                     |
 | transaction_cost_bps | 5.0                     |
@@ -23,39 +23,29 @@ Start capital $10,000. Buy & hold uses $10,000 x (last_close / first_close) on a
 
 | Strategy          |   Final Equity |   Return |   CAGR |   Max DD |   Sharpe |   Alpha |   Beta |
 |:------------------|---------------:|---------:|-------:|---------:|---------:|--------:|-------:|
-| Titan-12 Momentum |     116,951.58 | 1069.52% | 28.97% |  -39.33% |     0.83 |  13.62% |   1.30 |
-| SPY Buy & Hold    |      39,072.34 |  290.72% | 15.14% |  -23.79% |     0.95 |   0.00% |   1.00 |
+| Titan-12 Momentum |      43,173.93 |  331.74% | 16.19% |  -37.36% |     0.58 |   2.13% |   1.30 |
+| SPY Buy & Hold    |      38,464.26 |  284.64% | 14.82% |  -23.79% |     0.94 |   0.00% |   1.00 |
 
 ## Summary Stats
 
 |   total_return |     CAGR |   annualized_volatility |   Sharpe_ratio |   Sortino_ratio |   max_drawdown |   Calmar_ratio |   monthly_win_rate |   win_rate_vs_SPY |   average_monthly_return |   median_monthly_return |   best_month |   worst_month |   number_of_rebalances |   average_turnover | average_holding_period   |
 |---------------:|---------:|------------------------:|---------------:|----------------:|---------------:|---------------:|-------------------:|------------------:|-------------------------:|------------------------:|-------------:|--------------:|-----------------------:|-------------------:|:-------------------------|
-|        10.6952 | 0.289684 |                0.409754 |       0.825915 |         1.45967 |      -0.393272 |       0.736599 |           0.568966 |          0.474138 |                0.0282018 |               0.0246526 |     0.414487 |     -0.304786 |                    116 |           0.428161 | 1 month                  |
+|        3.31739 | 0.161852 |                0.381152 |       0.579658 |          1.0889 |       -0.37357 |       0.433259 |           0.615385 |          0.555556 |                0.0184115 |                0.028794 |     0.392148 |     -0.225231 |                    117 |           0.521368 | 1 month                  |
 
 ## Latest Completed Rebalance
 
-2026-09-01: MRNA, SNDK, MU
+2026-10-01: MRNA, DELL, MRVL
 
-
-## Next Rebalance 2026-11-02 (signal locked 2026-10-30)
-
-Final: MRNA, SNDK, DELL
-
-Baseline (pre-exclusion): MRNA, SNDK, DELL
-
-Excluded sister Nasdaq next picks: CRWD, MU, PANW
-
-Signal uses monthly returns through the last close; the fill is the next open.
 
 ## Final Top 3 (Nasdaq-Overlap Excluded)
 
-2026-10-01: MRNA, DELL, MRVL
+2026-11-02: MRNA, SNDK, DELL
 
-Excluded sister Nasdaq top picks: MU, INTC, SNDK
+Excluded sister Nasdaq top picks: CRWD, MU, PANW
 
 ## Baseline Open Basket (pre-exclusion)
 
-2026-10-01: MRNA, SNDK, DELL
+2026-11-02: MRNA, SNDK, DELL
 
 ## Charts
 
@@ -74,12 +64,13 @@ Excluded sister Nasdaq top picks: MU, INTC, SNDK
 
 | issue_type                   |   count |
 |:-----------------------------|--------:|
-| insufficient_history         |    6243 |
+| insufficient_history         |    6247 |
 | missing_price_history        |    4290 |
 | download_failed              |     176 |
 | insufficient_selection_count |      13 |
+| missing_sister_basket        |       7 |
 
-Showing the first 50 of 10,722 issues. Full list: logs/data_quality_report.csv
+Showing the first 50 of 10,733 issues. Full list: logs/data_quality_report.csv
 
 | date   | ticker   | issue_type      | message                       |
 |:-------|:---------|:----------------|:------------------------------|
@@ -136,5 +127,5 @@ Showing the first 50 of 10,722 issues. Full list: logs/data_quality_report.csv
 
 ## Test Results
 
-`pytest -q`: 33 passed in 0.77s
+`pytest -q`: 39 passed in 0.49s
 

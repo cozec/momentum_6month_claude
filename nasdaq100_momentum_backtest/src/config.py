@@ -48,7 +48,7 @@ class BacktestConfig:
     """Container for all backtest configuration parameters."""
 
     start_date: str = "2016-01-01"
-    end_date: str = "2026-05-12"
+    end_date: str = date.today().isoformat()
     top_n: int = 3
     lookback_months: int = 6
     rebalance_frequency: str = "monthly"

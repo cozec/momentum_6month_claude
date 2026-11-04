@@ -14,6 +14,9 @@ import pandas as pd
 
 from .utils import to_business_date
 
+# Sessions without a close before a rebalance that make a ticker untradable.
+STALE_SESSIONS = 5
+
 
 def get_first_trading_days(price_df: pd.DataFrame) -> List[pd.Timestamp]:
     """Return the first trading day of each month in ``price_df``."""
@@ -35,8 +38,27 @@ def calculate_monthly_returns(price_df: pd.DataFrame) -> pd.DataFrame:
     if price_df.empty:
         return price_df.copy()
     monthly = price_df.resample("ME").last()
-    returns = monthly.pct_change()
+    # fill_method=None: a month without prices must stay NaN, not become a
+    # padded 0% return that keeps a stalled ticker eligible.
+    returns = monthly.pct_change(fill_method=None)
     return returns
+
+
+def find_stale_tickers(
+    price_df: pd.DataFrame, rebalance_date, max_sessions: int = STALE_SESSIONS
+) -> List[str]:
+    """Tickers with no close in the last ``max_sessions`` bars before a rebalance.
+
+    A stalled ticker (halted, delisted, or a refresh that failed) would score
+    on an old price passed off as a full month, so it is not tradable at that
+    rebalance. Only bars strictly before ``rebalance_date`` are read, which is
+    what the decision can see.
+    """
+    recent = price_df.loc[price_df.index < to_business_date(rebalance_date)].tail(max_sessions)
+    if recent.empty:
+        return []
+    fresh = recent.notna().any(axis=0)
+    return fresh[~fresh].index.tolist()
 
 
 def calculate_momentum_scores(

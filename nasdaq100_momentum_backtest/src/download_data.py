@@ -13,13 +13,14 @@ from __future__ import annotations
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
+from threading import Lock, get_ident
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 import yfinance as yf
 
 from .config import RAW_PRICES_DIR
+from .nyse_calendar import last_session_before
 from .utils import ensure_dir, get_logger, to_business_date
 
 LOGGER = get_logger("download_data")
@@ -52,10 +53,27 @@ _PANEL_LOCK = Lock()
 _FAILED_REFRESH: dict[str, float] = {}
 _FAILED_REFRESH_TTL = 6 * 3600.0
 
+# Dashboard requests run in a thread pool; one lock per ticker's cache file.
+_TICKER_LOCKS: Dict[str, Lock] = {}
+
+
+def _ticker_lock(ticker: str) -> Lock:
+    """Return the lock guarding ``ticker``'s cache file."""
+    with _PANEL_LOCK:
+        return _TICKER_LOCKS.setdefault(ticker, Lock())
+
 
 def _cache_path(ticker: str) -> str:
     """Return the on-disk CSV path for ``ticker``."""
     return os.path.join(RAW_PRICES_DIR, f"{ticker.upper()}.csv")
+
+
+def _write_cache(df: pd.DataFrame, ticker: str) -> None:
+    """Atomically replace ``ticker``'s cache file, so a reader never sees a partial CSV."""
+    path = _cache_path(ticker)
+    tmp = f"{path}.{os.getpid()}.{get_ident()}.tmp"
+    df.to_csv(tmp, index_label="Date")
+    os.replace(tmp, path)
 
 
 def _clean_price_frame(df: pd.DataFrame) -> pd.DataFrame:
@@ -108,20 +126,25 @@ def _load_cached(ticker: str) -> Optional[pd.DataFrame]:
     return df
 
 
-def _cache_covers(df: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -> bool:
-    """Return True when ``df`` extends through (roughly) ``end``.
+def _cache_covers(
+    df: pd.DataFrame,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    now: Optional[pd.Timestamp] = None,
+) -> bool:
+    """Return True when ``df`` reaches the latest settled NYSE session by ``end``.
 
     We only enforce the end boundary: yfinance hands back at most the
     earliest available print for each ticker, so re-downloading a
-    post-IPO name doesn't yield more history. The 3-day calendar
-    tolerance covers weekends/holidays so a cache produced on Friday
-    is still valid over the weekend.
+    post-IPO name doesn't yield more history. ``now`` is the current New
+    York time; it defaults to the clock.
     """
     if df.empty:
         return False
-    cached_end = df.index.max()
-    end_tolerance = end - pd.Timedelta(days=3)
-    return cached_end >= end_tolerance
+    now = now if now is not None else pd.Timestamp.now(tz="America/New_York")
+    today = now.tz_localize(None).normalize() if now.tzinfo else now.normalize()
+    settled = today if now - now.normalize() >= SESSION_SETTLED else today - pd.Timedelta(days=1)
+    return df.index.max() >= last_session_before(min(end, settled) + pd.Timedelta(days=1))
 
 
 # Yahoo's daily bar for the current session is a live quote until the close
@@ -306,7 +329,7 @@ def download_price_panels(
     ).reindex(closes.index)
     opens = _fill_prices(raw_opens, closes)
     with _PANEL_LOCK:
-        _PANEL_CACHE[cache_key] = (now, closes, opens)
+        _PANEL_CACHE[cache_key] = (time.time(), closes, opens)
     return closes.copy(), opens.copy()
 
 
@@ -343,13 +366,41 @@ def _fetch_ticker_prices(
     force_refresh: bool,
     full_refresh: bool,
 ) -> Optional[pd.DataFrame]:
-    """Resolve one ticker's ``Close`` and ``Open`` columns over ``[start, end]``.
+    """One ticker's ``Close`` and ``Open`` over ``[start, end]``; see :func:`fetch_ticker_frame`."""
+    window = fetch_ticker_frame(ticker, start, end, force_refresh, full_refresh)
+    if window is None:
+        return None
+    if "Open" not in window.columns:
+        window = window.assign(Open=float("nan"))
+    return window[["Close", "Open"]]
+
+
+def fetch_ticker_frame(
+    ticker: str,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    force_refresh: bool,
+    full_refresh: bool,
+) -> Optional[pd.DataFrame]:
+    """Resolve one ticker's cleaned daily bars over ``[start, end]``.
 
     Reuses the CSV cache, fetching only the missing tail when stale, and
     writes the merged history back. Returns ``None`` when no usable data
-    is available. Safe to run concurrently — each ticker owns its own
-    cache file.
+    is available. Safe to run concurrently: a per-ticker lock serializes
+    refreshes of one cache file, and writes replace it atomically.
     """
+    with _ticker_lock(ticker):
+        return _resolve_ticker_frame(ticker, start, end, force_refresh, full_refresh)
+
+
+def _resolve_ticker_frame(
+    ticker: str,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    force_refresh: bool,
+    full_refresh: bool,
+) -> Optional[pd.DataFrame]:
+    """Body of :func:`fetch_ticker_frame`, called with the ticker's lock held."""
     # full_refresh discards the cache so the ticker is re-downloaded
     # from scratch and its file overwritten with re-adjusted bars.
     cached = None if full_refresh else _load_cached(ticker)
@@ -407,12 +458,10 @@ def _fetch_ticker_prices(
             # Merge with the existing cache so we keep the broadest range.
             df = pd.concat([cached, fresh]) if cached is not None else fresh
             df = _clean_price_frame(df)
-            df.to_csv(_cache_path(ticker), index_label="Date")
+            _write_cache(df, ticker)
 
     # Restrict to the requested window for the returned panel.
     window = df.loc[(df.index >= start) & (df.index <= end)]
     if window.empty:
         return None
-    if "Open" not in window.columns:
-        window = window.assign(Open=float("nan"))
-    return window[["Close", "Open"]]
+    return window

@@ -28,6 +28,7 @@ from src.nyse_calendar import NYSEHolidayCalendar  # noqa: E402
 from src.signals import (  # noqa: E402
     calculate_momentum_scores,
     calculate_monthly_returns,
+    find_stale_tickers,
     get_first_trading_days,
     select_top_n,
 )
@@ -398,6 +399,49 @@ class TestOpenFills(unittest.TestCase):
         self.assertEqual(opens["XYZ"].tolist(), [10.0, 11.0, 12.0, 13.0, 14.0])
 
 
+class TestStalePrices(unittest.TestCase):
+    """A stalled ticker must not score on old prices."""
+
+    def setUp(self):
+        self.prices = _make_daily_prices("2025-01-01", "2026-10-30", ["AAA", "BBB"], seed=5)
+        self.prices.loc["2026-08-11":, "BBB"] = np.nan
+
+    def test_month_without_prices_is_nan_not_zero(self):
+        monthly = calculate_monthly_returns(self.prices)
+        self.assertTrue(np.isnan(monthly.loc["2026-09-30", "BBB"]))
+        self.assertFalse(np.isnan(monthly.loc["2026-09-30", "AAA"]))
+
+    def test_stale_tickers_seen_from_the_decision_date(self):
+        self.assertEqual(find_stale_tickers(self.prices, "2026-11-02"), ["BBB"])
+        # Before the stall it was tradable: no hindsight.
+        self.assertEqual(find_stale_tickers(self.prices, "2026-08-03"), [])
+
+    def test_partial_stall_within_the_month_is_stale(self):
+        prices = self.prices.copy()
+        prices["AAA"] = prices["AAA"].where(prices.index < "2026-10-12")
+        self.assertIn("AAA", find_stale_tickers(prices, "2026-11-02"))
+
+
+class TestCacheFiles(unittest.TestCase):
+    def test_cache_covers_requires_latest_settled_session(self):
+        ny = lambda s: pd.Timestamp(s, tz="America/New_York")  # noqa: E731
+        df = pd.DataFrame({"Close": [1.0]}, index=pd.to_datetime(["2026-10-29"]))
+        end = pd.Timestamp("2026-10-30")
+        start = pd.Timestamp("2026-01-01")
+        self.assertTrue(download_data._cache_covers(df, start, end, now=ny("2026-10-30 11:00")))
+        self.assertFalse(download_data._cache_covers(df, start, end, now=ny("2026-10-30 18:00")))
+        # Saturday: Friday's close is still the latest session.
+        self.assertFalse(download_data._cache_covers(df, start, end, now=ny("2026-10-31 12:00")))
+
+    def test_write_cache_leaves_no_temp_file(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        with mock.patch.object(download_data, "RAW_PRICES_DIR", tmp):
+            df = pd.DataFrame({"Close": [1.0]}, index=pd.to_datetime(["2026-10-29"]))
+            download_data._write_cache(df, "XYZ")
+        self.assertEqual(os.listdir(tmp), ["XYZ.csv"])
+
+
 class TestLeaderboard(unittest.TestCase):
     def setUp(self):
         tickers = ["AAA", "BBB", "CCC", "DDD", "EEE", "QQQ"]
@@ -414,6 +458,11 @@ class TestLeaderboard(unittest.TestCase):
         self.assertEqual(list(board["ticker"]), list(scores.index[:4]))
         self.assertEqual(list(board["held"]), [True, True, False, False])
         self.assertNotIn("QQQ", set(board["ticker"]))
+
+    def test_short_history_does_not_crash(self):
+        short = self.prices.tail(10)
+        board = compute_leaderboard(short, self.monthly, self.config, self.entry, n=2)
+        self.assertEqual(len(board), 2)
 
     def test_trend_columns(self):
         board = compute_leaderboard(self.prices, self.monthly, self.config, self.entry)
@@ -490,6 +539,15 @@ class TestPicksEmail(unittest.TestCase):
         self.assertTrue(email["subject"].endswith("| Titan-12: buy DELL"))
         self.assertIn("<div>TITAN CARD</div></body>", email["html"])
         self.assertTrue(email["text"].endswith("Titan-12 trades"))
+
+
+    def test_stale_tickers_noted(self):
+        email = self.mod.build_email(self.bundle)
+        bundle = {"strategies": [{"stale_tickers": ["EA", "WBD"]}]}
+        noted = self.mod.add_stale_note(email, bundle)
+        self.assertIn("left out of the ranking: EA, WBD", noted["text"])
+        self.assertIn("EA, WBD", noted["html"])
+        self.assertEqual(self.mod.add_stale_note(email, {"strategies": [{}]}), email)
 
 
 class TestIncrementalCacheAdjustment(unittest.TestCase):

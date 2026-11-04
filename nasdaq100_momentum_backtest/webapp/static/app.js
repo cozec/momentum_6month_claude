@@ -418,6 +418,9 @@ function renderLeaderboard(root, data) {
   section.querySelector('[data-el="board-label"]').textContent = meta.upcoming
     ? `ranked for the ${fmtDay(meta.entry_date)} rebalance · signal locked · prices through ${fmtDay(asOf)}`
     : `ranked at the ${fmtDay(meta.entry_date)} rebalance · prices through ${fmtDay(asOf)}`;
+  if ((data.stale_tickers || []).length) {
+    section.querySelector('[data-el="board-label"]').textContent += ` · no fresh prices, left out: ${data.stale_tickers.join(', ')}`;
+  }
 
   // Sector chips with counts; clicking one filters the table.
   const counts = new Map();

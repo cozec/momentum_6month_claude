@@ -30,6 +30,7 @@ from src.signals import (
     calculate_titan12_score,
     get_first_trading_days,
     prices_to_adj_close_frame,
+    prices_to_fill_frame,
     rank_stocks_by_score,
     select_top_n,
 )
@@ -38,12 +39,11 @@ from src.utils import append_quality_issue, save_csv, setup_logging, write_summa
 
 LOGGER = logging.getLogger(__name__)
 
-# Sister Nasdaq strategy open basket, whose top picks are excluded from the
-# final S&P basket for cross-project diversification. Override with NASDAQ_OPEN_PATH.
-DEFAULT_NASDAQ_OPEN_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "nasdaq100_momentum_backtest" / "outputs" / "open_rebalance_picks.csv"
-)
+# Sister Nasdaq strategy baskets, whose picks are excluded from the same-date
+# S&P basket for cross-project diversification.
+_NASDAQ_OUTPUTS = Path(__file__).resolve().parents[2] / "nasdaq100_momentum_backtest" / "outputs"
+DEFAULT_NASDAQ_OPEN_PATH = _NASDAQ_OUTPUTS / "open_rebalance_picks.csv"
+DEFAULT_NASDAQ_SELECTIONS_PATH = _NASDAQ_OUTPUTS / "monthly_selections.csv"
 
 
 def calculate_turnover(
@@ -89,7 +89,11 @@ def calculate_portfolio_return(
     entry_date: object,
     exit_date: object,
 ) -> tuple[float, list[dict[str, object]]]:
-    """Calculate equal-weight gross return and per-stock return details."""
+    """Calculate equal-weight gross return and per-stock return details.
+
+    ``prices`` holds the fill prices: the adjusted-open panel in the backtest,
+    so positions enter at ``entry_date``'s open and exit at ``exit_date``'s.
+    """
 
     entry = pd.Timestamp(entry_date).normalize()
     exit_ = pd.Timestamp(exit_date).normalize()
@@ -126,7 +130,9 @@ def calculate_portfolio_return(
 
     if not returns:
         return np.nan, rows
-    return float(np.mean(returns)), rows
+    # Equal weight over the whole basket: a pick with no usable prices sits in
+    # cash at 0% rather than silently re-weighting the others.
+    return float(np.sum(returns) / len(selected_tickers)), rows
 
 
 def _benchmark_return(
@@ -146,81 +152,61 @@ def _benchmark_return(
     return float(exit_price / entry_price - 1.0)
 
 
-def _nasdaq_excluded_from_api(top_n: int, basket: str = "open") -> list[str]:
-    """Fetch a sister strategy basket from its dashboard API.
+def _sister_payload() -> dict[str, object]:
+    """Return the sister strategy's picks payload, or an empty dict if unreachable.
 
-    The sister project recomputes its baskets on every request, so its live
-    dashboard is fresher than its on-disk CSV (which only updates when its own
-    backtest is re-run). ``basket`` is ``"open"`` for the held basket or
-    ``"next"`` for the upcoming, signal-locked one. Returns an empty list if the
-    server is unreachable or the basket is absent.
+    ``NASDAQ_PICKS_FILE`` names a snapshot taken once per run (see
+    ``scripts/month_end.py``), so a long job reads one consistent answer and
+    never races the sister's cache expiry. Otherwise it asks the live dashboard.
     """
 
-    url = os.environ.get("NASDAQ_PICKS_URL", "http://127.0.0.1:8765/api/picks")
+    snapshot = os.environ.get("NASDAQ_PICKS_FILE")
+    if snapshot:
+        return json.loads(Path(snapshot).read_text())
+    url = os.environ.get("NASDAQ_PICKS_URL", "http://127.0.0.1:8765/api/picks?history=240")
     try:
         with urllib.request.urlopen(url, timeout=4) as response:  # noqa: S310 - local loopback
-            payload = json.loads(response.read().decode("utf-8"))
+            return json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        LOGGER.info("Sister dashboard %s unavailable (%s); will fall back to CSV.", url, exc)
-        return []
-    picks = payload.get(basket) or []
-    ordered = sorted(picks, key=lambda p: p.get("rank", 0))
-    tickers = [str(p["ticker"]) for p in ordered if p.get("ticker")][:top_n]
-    if tickers:
-        LOGGER.info("Excluding sister live %s picks from %s: %s", basket, url, tickers)
-    return tickers
-
-
-def _nasdaq_history_from_api() -> dict[pd.Timestamp, list[str]]:
-    """Fetch the sister strategy's completed baskets keyed by rebalance date.
-
-    Same freshness rationale as :func:`_nasdaq_excluded_from_api`: the sister
-    dashboard recomputes on every request, while its on-disk selections CSV only
-    changes when its own backtest re-runs, so recent months are often missing
-    from the CSV entirely. Returns an empty mapping if the server is unreachable.
-    """
-
-    url = os.environ.get("NASDAQ_PICKS_URL", "http://127.0.0.1:8765/api/picks")
-    try:
-        with urllib.request.urlopen(url, timeout=4) as response:  # noqa: S310 - local loopback
-            payload = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        LOGGER.info("Sister dashboard %s unavailable (%s); will fall back to CSV.", url, exc)
+        LOGGER.info("Sister dashboard %s unavailable (%s).", url, exc)
         return {}
+
+
+def _baskets_by_date(rows: list[dict[str, object]]) -> dict[pd.Timestamp, list[str]]:
+    """Group sister pick rows into tickers per rebalance date, in rank order."""
+
     ranked: dict[pd.Timestamp, list[tuple[int, str]]] = {}
-    for row in payload.get("completed") or []:
-        ticker = row.get("ticker")
-        if not row.get("date") or not ticker:
-            continue
-        date = pd.Timestamp(row["date"]).normalize()
-        ranked.setdefault(date, []).append((int(row.get("rank", 0)), str(ticker)))
-    return {date: [ticker for _, ticker in sorted(rows)] for date, rows in ranked.items()}
+    for row in rows:
+        if row.get("date") and row.get("ticker"):
+            date = pd.Timestamp(row["date"]).normalize()
+            ranked.setdefault(date, []).append((int(row.get("rank", 0)), str(row["ticker"])))
+    return {date: [ticker for _, ticker in sorted(picks)] for date, picks in ranked.items()}
 
 
-def _read_nasdaq_excluded_tickers(top_n: int) -> list[str]:
-    """Return the sister Nasdaq strategy's current top-N picks to exclude.
+def _sister_baskets() -> dict[pd.Timestamp, list[str]]:
+    """Return the sister's baskets keyed by rebalance date.
 
-    Prefers the live dashboard (freshest), then falls back to the on-disk CSV.
+    Each is decided on the close before its date, the same information the S&P
+    basket of that date has, so excluding it adds no lookahead. The dashboard is
+    fresher; its on-disk CSVs fill in dates it does not return.
     """
 
-    live = _nasdaq_excluded_from_api(top_n)
-    if live:
-        return live
+    baskets: dict[pd.Timestamp, list[str]] = {}
+    for path in (DEFAULT_NASDAQ_SELECTIONS_PATH, DEFAULT_NASDAQ_OPEN_PATH):
+        if path.exists() and path.stat().st_size > 1:
+            rows = pd.read_csv(path).rename(columns={"rebalance_date": "date"})
+            baskets.update(_baskets_by_date(rows.to_dict("records")))
+    payload = _sister_payload()
+    baskets.update(_baskets_by_date(payload.get("completed") or []))
+    baskets.update(_baskets_by_date(payload.get("open") or []))
+    return baskets
 
-    path = Path(os.environ.get("NASDAQ_OPEN_PATH", str(DEFAULT_NASDAQ_OPEN_PATH)))
-    if not path.exists():
-        LOGGER.info("No Nasdaq open picks at %s; skipping overlap exclusion.", path)
-        return []
-    ndx = pd.read_csv(path)
-    if ndx.empty or "ticker" not in ndx.columns:
-        return []
-    if "rebalance_date" in ndx.columns:
-        latest = ndx["rebalance_date"].max()
-        ndx = ndx[ndx["rebalance_date"] == latest]
-    if "rank" in ndx.columns:
-        ndx = ndx.sort_values("rank")
-    LOGGER.info("Excluding sister CSV picks from %s (CSV fallback).", path)
-    return ndx["ticker"].astype(str).head(top_n).tolist()
+
+def _sister_next_basket() -> list[str]:
+    """Return the sister's upcoming, signal-locked basket, or an empty list."""
+
+    baskets = _baskets_by_date(_sister_payload().get("next") or [])
+    return next(iter(baskets.values()), [])
 
 
 def _calculate_open_selections(
@@ -228,10 +214,13 @@ def _calculate_open_selections(
     membership: pd.DataFrame,
     monthly_returns: pd.DataFrame,
     adj_close: pd.DataFrame,
+    fills: pd.DataFrame,
     open_date: pd.Timestamp,
     excluded: list[str] | None = None,
 ) -> pd.DataFrame:
     """Calculate an open basket and month-to-date stock returns.
+
+    Entry is ``open_date``'s fill price; the mark is the latest close.
 
     When ``excluded`` is provided, those tickers are dropped from the ranking
     before taking the top N, so the ``rank`` column keeps each name's original
@@ -262,7 +251,7 @@ def _calculate_open_selections(
         ticker = row["ticker"]
         if ticker not in adj_close.columns:
             continue
-        entry_price = adj_close.loc[open_date, ticker] if open_date in adj_close.index else np.nan
+        entry_price = fills.loc[open_date, ticker] if open_date in fills.index else np.nan
         as_of_price = adj_close.loc[as_of_date, ticker]
         if pd.isna(entry_price) or pd.isna(as_of_price) or entry_price <= 0:
             continue
@@ -278,6 +267,7 @@ def _calculate_open_selections(
                 "entry_price": float(entry_price),
                 "as_of_price": float(as_of_price),
                 "stock_return": float(as_of_price / entry_price - 1.0),
+                "excluded_tickers": ",".join(excluded or []),
             }
         )
     return pd.DataFrame(rows)
@@ -340,6 +330,7 @@ def _calculate_next_selections(
                 "rank": int(row["rank"]),
                 "weighted_momentum_score": row["weighted_momentum_score"],
                 "entry_price_estimate": float(price),
+                "excluded_tickers": ",".join(excluded or []),
             }
         )
     return pd.DataFrame(rows)
@@ -402,10 +393,25 @@ def _calculate_leaderboard(
             "prev_rank": top_prev,
             "rank_change": top_prev - top["rank"].to_numpy(),
             "latest_price": latest.to_numpy(),
-            "ret_1m": (latest / prices.iloc[-22] - 1.0).to_numpy(),
+            "ret_1m": (latest / prices.iloc[-min(22, len(prices))] - 1.0).to_numpy(),
             "off_6m_high": (latest / prices.iloc[-126:].max() - 1.0).to_numpy(),
         }
     )
+
+
+def _select_excluding(
+    scores: pd.DataFrame, top_n: int, excluded: list[str]
+) -> pd.DataFrame:
+    """Take the top ``top_n`` after dropping ``excluded``, keeping original ranks."""
+
+    if not excluded:
+        return select_top_n(scores, top_n)
+    ranked = rank_stocks_by_score(scores)
+    if ranked.empty:
+        return select_top_n(scores, top_n)
+    selected = ranked[~ranked["ticker"].isin(excluded)].head(top_n).copy()
+    selected["weight"] = 1.0 / len(selected) if len(selected) else np.nan
+    return selected
 
 
 def _prepare_membership(config: BacktestConfig) -> pd.DataFrame:
@@ -448,6 +454,12 @@ def run_backtest(
     adj_close = prices_to_adj_close_frame(price_data)
     if adj_close.empty:
         raise RuntimeError("No adjusted close data available for the requested run.")
+    if config.benchmark in adj_close.columns:
+        # A session counts once the benchmark has settled; a few names can post a
+        # close before the rest, which must not read as the latest date for all.
+        adj_close = adj_close.loc[adj_close[config.benchmark].notna()]
+    # Signals use adjusted closes; trades fill at the first trading day's open.
+    fills = prices_to_fill_frame(price_data, adj_close)
 
     first_trading_days = [
         date
@@ -467,7 +479,7 @@ def run_backtest(
     previous_holdings: set[str] = set()
     portfolio_value = float(config.initial_capital)
     spy_value = float(config.initial_capital)
-    cost_rate = (config.transaction_cost_bps + config.slippage_bps) / 10000.0
+    sister_baskets = _sister_baskets() if config.universe == "sp500" else {}
 
     for entry_date, exit_date in zip(first_trading_days[:-1], first_trading_days[1:]):
         eligible = get_eligible_universe(membership, entry_date)
@@ -481,7 +493,16 @@ def run_backtest(
             metadata=metadata,
             quality_issues=quality_issues,
         )
-        selected = select_top_n(scores, config.top_n)
+        excluded = sister_baskets.get(entry_date, [])
+        if config.universe == "sp500" and not excluded:
+            append_quality_issue(
+                quality_issues,
+                "",
+                "missing_sister_basket",
+                "No sister Nasdaq basket for this date; no overlap exclusion applied.",
+                entry_date,
+            )
+        selected = _select_excluding(scores, config.top_n, excluded)
         selected_tickers = selected["ticker"].tolist() if not selected.empty else []
         if len(selected_tickers) < config.top_n:
             append_quality_issue(
@@ -496,7 +517,7 @@ def run_backtest(
                 continue
 
         gross_return, stock_details = calculate_portfolio_return(
-            selected_tickers, adj_close, entry_date, exit_date
+            selected_tickers, fills, entry_date, exit_date
         )
         if pd.isna(gross_return):
             append_quality_issue(
@@ -510,10 +531,16 @@ def run_backtest(
             continue
 
         turnover = calculate_turnover(previous_holdings, selected_tickers)
-        transaction_cost = turnover * (config.transaction_cost_bps / 10000.0)
-        slippage_cost = turnover * (config.slippage_bps / 10000.0)
+        # One-way turnover counts each rotation once, but it trades twice: the
+        # sells and the buys. The first basket only buys.
+        traded = turnover * (2.0 if previous_holdings else 1.0)
+        transaction_cost = traded * (config.transaction_cost_bps / 10000.0)
+        slippage_cost = traded * (config.slippage_bps / 10000.0)
         net_return = gross_return - transaction_cost - slippage_cost
         spy_return = _benchmark_return(adj_close, config.benchmark, entry_date, exit_date)
+        # Same open-to-open window as the strategy, for per-period comparisons;
+        # spy_return (close-to-close) drives the buy & hold equity.
+        spy_return_fill = _benchmark_return(fills, config.benchmark, entry_date, exit_date)
         portfolio_value *= 1.0 + net_return
         if pd.notna(spy_return):
             spy_value *= 1.0 + spy_return
@@ -547,9 +574,11 @@ def run_backtest(
                 "slippage_cost": slippage_cost,
                 "portfolio_return_net": net_return,
                 "spy_return": spy_return,
-                "excess_return_vs_spy": net_return - spy_return
-                if pd.notna(spy_return)
+                "spy_return_fill": spy_return_fill,
+                "excess_return_vs_spy": net_return - spy_return_fill
+                if pd.notna(spy_return_fill)
                 else np.nan,
+                "excluded_tickers": ",".join(excluded),
                 "portfolio_value": portfolio_value,
                 "spy_value": spy_value,
                 "turnover": turnover,
@@ -596,15 +625,21 @@ def run_backtest(
     if first_trading_days:
         open_date = first_trading_days[-1]
         open_selections = _calculate_open_selections(
-            config, membership, monthly_returns, adj_close, open_date
+            config, membership, monthly_returns, adj_close, fills, open_date
         )
-        # Final basket: drop the sister Nasdaq strategy's current top picks and
+        # Final basket: drop the sister Nasdaq strategy's same-date picks and
         # backfill from the next-highest S&P names for cross-project diversification.
         # The Nasdaq-100 universe run is itself a Nasdaq strategy, so it skips this.
         if config.universe == "sp500":
-            nasdaq_excluded = _read_nasdaq_excluded_tickers(config.top_n)
+            nasdaq_excluded = sister_baskets.get(open_date, [])
+            if not nasdaq_excluded:
+                raise RuntimeError(
+                    f"No sister Nasdaq basket dated {open_date.date()}: start its dashboard "
+                    "on port 8765 or re-run its backtest."
+                )
         final_selections = _calculate_open_selections(
-            config, membership, monthly_returns, adj_close, open_date, excluded=nasdaq_excluded
+            config, membership, monthly_returns, adj_close, fills, open_date,
+            excluded=nasdaq_excluded,
         )
         plot_recent_rebalances(
             monthly_selections,
@@ -626,7 +661,7 @@ def run_backtest(
     next_excluded: list[str] = []
     if not next_selections.empty:
         if config.universe == "sp500":
-            next_excluded = _nasdaq_excluded_from_api(config.top_n, basket="next")
+            next_excluded = _sister_next_basket()
             if not next_excluded:
                 LOGGER.warning(
                     "Sister next basket unavailable; next final basket has no overlap exclusion."

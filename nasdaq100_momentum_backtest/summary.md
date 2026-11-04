@@ -30,14 +30,14 @@
 | Annualized volatility | 38.39% | 20.11% | 62.87% |
 | Sharpe ratio | **1.26** | 1.04 | 0.86 |
 | Max drawdown | -35.49% | -33.67% | **-80.13%** |
-| Alpha vs QQQ (annualized) | 22.83% | 0.00% | — |
-| Beta vs QQQ | 1.22 | 1.00 | — |
+| Alpha vs QQQ (annualized) | 22.18% | 0.00% | — |
+| Beta vs QQQ | 1.26 | 1.00 | — |
 | Average monthly return | 4.03% | 1.74% | 4.52% |
 | Median monthly return | 2.09% | 2.08% | 5.10% |
 | Best month | +53.24% | +16.69% | +52.19% |
 | Worst month | -21.71% | -15.58% | -52.31% |
-| Win rate vs QQQ (months) | 65.0% | — | — |
-| Win rate vs TQQQ (months) | 48.7% | — | — |
+| Win rate vs QQQ (months) | 61.5% | — | — |
+| Win rate vs TQQQ (months) | 46.2% | — | — |
 | Average turnover | 82.91%/mo | — | — |
 
 ## Fill convention: next open (2026-11-02)
@@ -50,12 +50,12 @@ Titan-12 and the decide-on-close / fill-at-next-open rule. Same window
 | Strategy | Final equity ($10k) | Return | CAGR | Max DD | Sharpe | Alpha | Beta |
 |----------|--------------------:|-------:|-----:|-------:|-------:|------:|-----:|
 | Close fill (old) | $556,499 | +5,465% | 51.02% | -32.43% | 1.25 | 21.62% | 1.31 |
-| **Open fill (new)** | **$541,415** | **+5,314%** | **50.59%** | **-35.49%** | **1.26** | **22.83%** | **1.22** |
+| **Open fill (new)** | **$541,415** | **+5,314%** | **50.59%** | **-35.49%** | **1.26** | **22.18%** | **1.26** |
 | QQQ B&H | $62,298 | +523% | 20.64% | -33.67% | 1.04 | 0.00% | 1.00 |
 
-Alpha (annualized) and beta are from a regression of monthly returns on
-QQQ's. QQQ buy & hold is $10,000 × last close / first close over the
-rebalance window.
+Alpha (annualized) and beta regress monthly returns on QQQ's over the same
+open-to-open window (win rates too, so like compares with like). QQQ buy & hold
+equity is $10,000 × last close / first close over the rebalance window.
 
 The headline barely moves (no lookahead was involved either way: the signal
 is locked a session before both fills), but individual months shift by
@@ -243,11 +243,11 @@ The dashboard + monthly email pipeline is wired up end-to-end, all on free tiers
 
 | Piece | Service | Notes |
 |---|---|---|
-| Dashboard | Render Free web service (`momentum-web`) | Tailwind SPA showing Strategy A (L=6m/P=1m) and Strategy B (L=3m/P=2m) side-by-side. Sleeps after 15 min idle; first call ≈ 30 s wake + < 1 s after that. |
-| Monthly cron | GitHub Actions (`monthly-picks-email.yml`) | Runs at `30 22 26-31 * *` UTC and sends only on the month's last NYSE trading day (when next month's picks lock). Pre-warms `/health`, fetches `/api/dashboard?refresh=1`, emails each strategy's sell / buy / keep list. |
+| Dashboard | Local (`run_webapp.py`); static snapshot on GitHub Pages | Strategy A only (L=6m/P=1m). |
+| Monthly cron | GitHub Actions (`monthly-picks-email.yml`) | Runs at `30 22 26-31 * *` UTC and works only on the month's last NYSE trading day (when next month's picks lock). Starts the dashboard on the runner, refreshes prices, snapshots both reports, deploys Pages, and sends one combined email. |
 | Email delivery | Resend (3,000 / mo free) | Cloudflare-fronted; the script sends a non-default `User-Agent` so the POST isn't blocked with code 1010. |
 
-**Month-end timing:** after the close of the month's last NYSE trading day the dashboard shows both strategies' locked "Next picks" and the email goes out with the trade list; on the first trading day the strategy rebalances at the open (market-on-open), and the completed month becomes a new row in "Past rebalances". The lock uses an NYSE holiday calendar (`src/nyse_calendar.py`), and today's bar is ignored until 16:30 ET so a live intraday price is never treated as a close.
+**Month-end timing:** after the close of the month's last NYSE trading day the dashboard shows the locked "Next picks" and the email goes out with the trade list; on the first trading day the strategy rebalances at the open (market-on-open), and the completed month becomes a new row in "Past rebalances". The lock uses an NYSE holiday calendar (`src/nyse_calendar.py`), and today's bar is ignored until 16:30 ET so a live intraday price is never treated as a close.
 
 ### Dashboard UX & refresh performance
 
@@ -307,7 +307,7 @@ The incremental cache refresh appended fresh bars onto cached history without ch
 1. **Survivorship bias** — current-constituents universe overstates strategy returns. The grid-search experiment first estimated this at ~31 pp (dropping post-2018 index additions cut CAGR from ~78% to ~47%). With a Wikipedia-sourced PIT membership CSV (`python scripts/build_membership.py` then `--use-historical-membership`), the measured delta is ~32 pp: **CAGR 83.4% → 51.0%, Sharpe 1.43 → 1.25, max DD -36.5% → -32.4%** over the same 117-rebalance window (former members included; 29 delisted names without Yahoo data are still missing). Sharpe and DD barely move — the strategy *quality* is intact; the excess return is what shrinks. QQQ and TQQQ buy-and-hold figures are unaffected.
 2. **Leverage decay** — TQQQ resets exposure daily, so over multi-month windows the return is path-dependent and typically less than 3× the QQQ return. The realized -80% drawdown is the worst-case manifestation of that path dependence.
 3. **Concentration risk** — top-3 equal-weight is highly concentrated; the realized volatility reflects that.
-4. **Execution** — fills assumed at the first-day adjusted close with 0 bps friction. Real capacity, market impact, and tax effects are not modelled; at ~72%/mo turnover, a 10 bps round-trip would shave ~0.86 pp/yr off the CAGR.
+4. **Execution** — fills assumed at the first-day adjusted open with 0 bps friction. Real capacity, market impact, and tax effects are not modelled; at ~72%/mo turnover, a 10 bps round-trip would shave ~0.86 pp/yr off the CAGR.
 5. **Universe is a static hardcoded snapshot.** It was reconciled to 101 tickers (the universe correction section above) but Nasdaq-100 reconstitutions happen quarterly; refresh `CURRENT_NASDAQ100` in `src/config.py` periodically.
 
 

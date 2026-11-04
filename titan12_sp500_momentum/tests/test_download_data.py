@@ -83,3 +83,35 @@ def test_refresh_overwrites_cache_with_full_redownload(
     assert len(prices["AAPL"]) == 450
     assert prices["AAPL"]["Adj Close"].iloc[0] == 2.0
     assert issues.empty
+
+
+def test_adjustment_change_redownloads_full_history(tmp_path, monkeypatch) -> None:
+    """A re-based overlap day takes the full series, not a spliced tail."""
+
+    cached = _prices("2026-01-05", 20)
+    cached.to_csv(download_data.price_cache_path(tmp_path, "AAA"))
+    rebased = _prices("2026-01-05", 25) * 0.5
+
+    def fake(ticker, start, end):
+        return rebased.loc[start:]
+
+    monkeypatch.setattr(download_data, "_download_ticker_history", fake)
+    prices, _ = download_price_data(
+        ["AAA"], "2026-01-05", rebased.index[-1].date().isoformat(), tmp_path
+    )
+    assert len(prices["AAA"]) == 25
+    assert (prices["AAA"]["Adj Close"] == 0.5).all()
+
+
+def test_unsettled_bars_are_dropped() -> None:
+    """A blank close, or today's bar before 16:30 ET, never reaches the cache."""
+
+    index = pd.to_datetime(["2026-11-02", "2026-11-03"])
+    frame = pd.DataFrame({column: 1.0 for column in PRICE_COLUMNS}, index=index)
+    blank = frame.copy()
+    blank.loc["2026-11-03", ["Close", "Adj Close"]] = float("nan")
+    assert list(download_data._clean_downloaded_prices(blank).index) == [index[0]]
+    intraday = pd.Timestamp("2026-11-03 11:00", tz="America/New_York")
+    evening = pd.Timestamp("2026-11-03 18:00", tz="America/New_York")
+    assert len(download_data._drop_unsettled_bar(frame, now=intraday)) == 1
+    assert len(download_data._drop_unsettled_bar(frame, now=evening)) == 2

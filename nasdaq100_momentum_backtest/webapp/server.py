@@ -24,7 +24,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -39,7 +39,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.backtest import run_backtest
 from src.config import RAW_PRICES_DIR, BacktestConfig
-from src.download_data import _cache_covers, _download_one, _load_cached
+from src.download_data import fetch_ticker_frame
 from src.metrics import calculate_summary_stats
 
 
@@ -59,6 +59,7 @@ _CACHE_LOCK = Lock()
 
 @app.get("/")
 def index() -> FileResponse:
+    """Serve the dashboard page."""
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
@@ -66,6 +67,11 @@ def index() -> FileResponse:
 def health() -> Dict[str, str]:
     """Cheap liveness probe — no backtest run, returns instantly."""
     return {"status": "ok"}
+
+
+def _utc_now() -> str:
+    """Current time as a timezone-aware ISO string, safe to parse in any browser zone."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _safe_float(x: Any) -> Optional[float]:
@@ -179,7 +185,7 @@ def _results_to_payload(
     recent_pr = portfolio[portfolio["rebalance_date"].isin(completed_dates)]
     window_cum_strategy = float((1.0 + recent_pr["portfolio_return_net"]).prod() - 1.0)
     # ``qqq_return`` holds the primary benchmark, whichever ticker it is.
-    window_cum_benchmark = float((1.0 + recent_pr["qqq_return"]).prod() - 1.0)
+    window_cum_benchmark = float((1.0 + recent_pr["qqq_return_fill"]).prod() - 1.0)
 
     completed_payload: List[Dict[str, Any]] = []
     for _, r in recent_picks.iterrows():
@@ -276,7 +282,8 @@ def _results_to_payload(
 
     return {
         "as_of": today.strftime("%Y-%m-%d"),
-        "computed_at": datetime.now().isoformat(timespec="seconds"),
+        "computed_at": _utc_now(),
+        "stale_tickers": results.get("stale_tickers") or [],
         "took_seconds": round(time.time() - started, 2),
         "strategy": strategy_meta,
         "completed": completed_payload,
@@ -369,7 +376,7 @@ def _compute_dashboard(
 
     return {
         "as_of": today.strftime("%Y-%m-%d"),
-        "computed_at": datetime.now().isoformat(timespec="seconds"),
+        "computed_at": _utc_now(),
         "strategies": [payload_a],
     }
 
@@ -384,7 +391,7 @@ def _get_cached_or_compute(
     ``refresh=True`` bypasses the cache *and* tells yfinance to
     re-download, which the monthly email cron uses.
     """
-    cache_key = (lookback, period, today.strftime("%Y-%m-%d"))
+    cache_key = (lookback, period, history, today.strftime("%Y-%m-%d"))
     now = time.time()
     if not refresh:
         with _CACHE_LOCK:
@@ -398,7 +405,7 @@ def _get_cached_or_compute(
     payload["cache_hit"] = False
     payload["cache_age_seconds"] = 0.0
     with _CACHE_LOCK:
-        _RESULT_CACHE[cache_key] = (now, payload)
+        _RESULT_CACHE[cache_key] = (time.time(), payload)
     return payload
 
 
@@ -410,9 +417,8 @@ def api_ohlc(
 ) -> Dict[str, Any]:
     """Return daily OHLCV bars for one ticker, used by the chart panel.
 
-    Reuses the same per-ticker CSV cache the backtest pipeline writes
-    to (``data/raw_prices/*.csv``). If the cache doesn't extend close
-    enough to today, fetch the missing slice and merge.
+    Resolves bars through the backtest's own cache path, so the unsettled
+    bar and adjustment-basis handling apply here too.
     """
     sym = ticker.strip().upper()
     if not sym or not sym.replace(".", "").replace("-", "").isalnum():
@@ -420,18 +426,12 @@ def api_ohlc(
     today = pd.Timestamp.now().normalize()
     start = today - pd.DateOffset(months=months)
 
-    cached = None if refresh else _load_cached(sym)
-    if cached is None or not _cache_covers(cached, start, today):
-        fetched = _download_one(sym, start, today)
-        if fetched is None or fetched.empty:
-            if cached is None or cached.empty:
-                raise HTTPException(status_code=404, detail=f"No price data for {sym}")
-        else:
-            cached = pd.concat([cached, fetched]) if cached is not None else fetched
-            cached = cached[~cached.index.duplicated(keep="last")].sort_index()
-
-    window = cached.loc[(cached.index >= start) & (cached.index <= today)]
-    if window.empty:
+    # A new ticker's first fetch seeds the shared cache, so request the same
+    # history the backtest would rather than just this chart's window.
+    full_start = pd.Timestamp(BacktestConfig.start_date)
+    frame = fetch_ticker_frame(sym, full_start, today, refresh, False)
+    window = frame.loc[frame.index >= start] if frame is not None else None
+    if window is None or window.empty:
         raise HTTPException(status_code=404, detail=f"No price data for {sym} in window")
 
     candles: List[Dict[str, Any]] = []
@@ -473,14 +473,14 @@ def api_dashboard(
     out = _compute_dashboard(history, refresh, today)
     out["cache_hit"] = False
     with _CACHE_LOCK:
-        _RESULT_CACHE[cache_key] = (now, out)
+        _RESULT_CACHE[cache_key] = (time.time(), out)
     return out
 
 
 @app.get("/api/picks")
 def api_picks(
     refresh: bool = Query(False, description="Re-download fresh prices"),
-    history: int = Query(12, ge=1, le=120, description="Past months to return"),
+    history: int = Query(12, ge=1, le=240, description="Past months to return"),
     lookback: int = Query(6, ge=1, le=24, description="Lookback months for momentum"),
     period: int = Query(1, ge=1, le=12, description="Months between rebalances"),
 ) -> Dict[str, Any]:
@@ -525,6 +525,6 @@ def api_picks_multi(
     ]
     return {
         "as_of": today.strftime("%Y-%m-%d"),
-        "computed_at": datetime.now().isoformat(timespec="seconds"),
+        "computed_at": _utc_now(),
         "strategies": strategies,
     }

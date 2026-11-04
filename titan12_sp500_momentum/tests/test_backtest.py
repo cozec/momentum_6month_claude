@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 
+from src import backtest
 from src.backtest import (
     _calculate_leaderboard,
     _calculate_next_selections,
+    _select_excluding,
     calculate_portfolio_return,
     calculate_turnover,
 )
 from src.config import BacktestConfig
 from src.nyse_calendar import next_session_after
-from src.signals import calculate_month_end_prices, calculate_monthly_returns
+from src.signals import (
+    calculate_month_end_prices,
+    calculate_monthly_returns,
+    prices_to_adj_close_frame,
+    prices_to_fill_frame,
+)
 
 
 def test_portfolio_return_equal_weight() -> None:
@@ -144,3 +153,66 @@ def test_leaderboard_ranks_all_names_and_flags_held() -> None:
     assert board["held"].tolist() == [True, True, True, False]
     assert board["rank_change"].tolist() == [0, 0, 0, 0]
     assert set(board["as_of_date"]) == {"2026-10-30"}
+
+
+def test_missing_prices_hold_cash_instead_of_reweighting() -> None:
+    """A pick with no prices stays at its weight in cash, 0%."""
+
+    prices = pd.DataFrame(
+        {"AAA": [100.0, 110.0], "BBB": [float("nan"), float("nan")]},
+        index=pd.to_datetime(["2024-01-02", "2024-02-01"]),
+    )
+    portfolio_return, _ = calculate_portfolio_return(
+        ["AAA", "BBB"], prices, "2024-01-02", "2024-02-01"
+    )
+    assert round(portfolio_return, 10) == 0.05
+
+
+def test_fills_are_adjusted_opens_with_prior_close_fallback() -> None:
+    """Open scales by Adj Close / Close; bad opens use the prior adjusted close."""
+
+    index = pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"])
+    frame = pd.DataFrame(
+        {
+            "Open": [20.0, 0.0, float("nan")],
+            "Close": [22.0, 24.0, 26.0],
+            "Adj Close": [11.0, 12.0, 13.0],
+        },
+        index=index,
+    )
+    adj_close = prices_to_adj_close_frame({"AAA": frame})
+    fills = prices_to_fill_frame({"AAA": frame}, adj_close)
+    assert fills["AAA"].tolist() == [10.0, 11.0, 12.0]
+
+
+def test_select_excluding_backfills_and_keeps_ranks() -> None:
+    """Excluded names are skipped; the backfill keeps its original rank."""
+
+    scores = pd.DataFrame(
+        {"ticker": ["AAA", "BBB", "CCC"], "weighted_momentum_score": [3.0, 2.0, 1.0]}
+    )
+    selected = _select_excluding(scores, 2, ["AAA"])
+    assert selected["ticker"].tolist() == ["BBB", "CCC"]
+    assert selected["rank"].tolist() == [2, 3]
+    assert selected["weight"].tolist() == [0.5, 0.5]
+
+
+def test_sister_baskets_read_the_snapshot(tmp_path, monkeypatch) -> None:
+    """The run reads the snapshot; baskets stay keyed by their own date."""
+
+    snapshot = tmp_path / "picks.json"
+    snapshot.write_text(json.dumps({
+        "completed": [
+            {"date": "2026-09-01", "ticker": "INTC", "rank": 2},
+            {"date": "2026-09-01", "ticker": "MU", "rank": 1},
+        ],
+        "open": [{"date": "2026-10-01", "ticker": "SNDK", "rank": 1}],
+        "next": [{"date": "2026-11-02", "ticker": "CRWD", "rank": 1}],
+    }))
+    monkeypatch.setenv("NASDAQ_PICKS_FILE", str(snapshot))
+    monkeypatch.setattr(backtest, "DEFAULT_NASDAQ_OPEN_PATH", tmp_path / "none.csv")
+    monkeypatch.setattr(backtest, "DEFAULT_NASDAQ_SELECTIONS_PATH", tmp_path / "none.csv")
+    baskets = backtest._sister_baskets()
+    assert baskets[pd.Timestamp("2026-09-01")] == ["MU", "INTC"]
+    assert baskets[pd.Timestamp("2026-10-01")] == ["SNDK"]
+    assert backtest._sister_next_basket() == ["CRWD"]

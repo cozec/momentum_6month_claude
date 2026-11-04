@@ -57,17 +57,16 @@ concentration, not from the lookback choice.
 
 ## Current Research Snapshot
 
-The latest local run used current S&P 500 constituents from Wikipedia. That is
-useful for a first pass, but it is survivorship-biased and should not be treated
-as point-in-time institutional research.
+The default run uses approximate point-in-time S&P 500 membership, fills at the
+first trading day's open, and excludes the sister Nasdaq basket of each date.
 
 Latest headline results are documented in `summary.md`:
 
-- strategy final value: $1,413,882 from $100,000
-- SPY final value: $366,701 from $100,000
-- strategy CAGR: 33.16%
-- SPY CAGR: 15.08%
-- completed rebalances: 111
+- strategy final value: $43,174 from $10,000
+- SPY final value: $38,464 from $10,000
+- strategy CAGR: 16.19%
+- SPY CAGR: 14.82%
+- completed rebalances: 117
 
 The summary also includes:
 
@@ -129,14 +128,17 @@ remains.
 ## Nasdaq-Overlap Exclusion Overlay
 
 For cross-project diversification against the sister Nasdaq strategy, the
-**final** S&P basket excludes the sister's current top picks:
+S&P basket excludes the sister's top picks **of the same rebalance date**, in the
+historical backtest as well as the current basket, so the headline stats describe
+the basket actually held:
 
-1. Read the sister's current top-3 open picks. The backtest prefers the sister's
-   live dashboard (`http://127.0.0.1:8765/api/picks`, override with
-   `NASDAQ_PICKS_URL`) because that is recomputed each request and stays fresher
-   than its on-disk CSV; if the dashboard is offline it falls back to
-   `.../nasdaq100_momentum_backtest/outputs/open_rebalance_picks.csv`
-   (override with `NASDAQ_OPEN_PATH`).
+1. Read the sister's dated baskets: a snapshot named by `NASDAQ_PICKS_FILE` when
+   set (`scripts/month_end.py` takes one per run), else its live dashboard
+   (`http://127.0.0.1:8765/api/picks?history=240`, override with
+   `NASDAQ_PICKS_URL`), merged over its on-disk `outputs/` CSVs. Each basket is
+   decided on the same prior close as the S&P basket, so this adds no lookahead.
+   A run with no sister basket dated like the open rebalance stops with an error;
+   older dates without one are logged as `missing_sister_basket`.
 2. Drop any of those sister tickers from the S&P 500 Titan-12 ranking.
 3. Backfill from the next-highest S&P 500 Titan-12 ranked names until 3 names
    are selected.
@@ -182,12 +184,12 @@ Nasdaq-100 project (`../nasdaq100_momentum_backtest`). One GitHub Action
 (`../.github/workflows/monthly-picks-email.yml`) handles month-end for both: on
 the month's last NYSE trading day it starts the Nasdaq-100 dashboard, then runs
 `scripts/month_end.py --email-json …`, which refreshes prices, re-runs the S&P 500
-(and Nasdaq-100) Titan-12 backtests, checks the next basket doesn't overlap the
-sister's, and rebuilds `report.html`. The Action publishes it at
+Titan-12 backtest, checks the next basket doesn't overlap the sister's, and
+rebuilds `report.html`. The Action publishes it at
 <https://cozec.github.io/momentum_6month_claude/titan12/report.html> and sends
-one email covering both strategies. The price cache (`data/raw_prices/`) is not
-in git; the Action keeps it in the Actions cache. The membership CSVs are
-tracked.
+one email covering both strategies, and still sends the Nasdaq-100 part if this
+step fails. A seed price cache (`data/raw_prices/`) and the membership CSVs are
+tracked; each run tops the cache up from the seed and does not commit it back.
 
 To run it by hand (publishes and sends its own email):
 
@@ -219,38 +221,6 @@ public/app.js
 public/dashboard.json
 public/charts/*.png
 ```
-
-For automated daily updates, this repo includes:
-
-```text
-.github/workflows/cloudflare-pages-dashboard.yml
-```
-
-The workflow runs after the US market close on every weekday and rebuilds the
-whole dashboard each time. The basket only rolls over on the first NYSE-style
-trading day of the month, but the daily rebuild keeps the month-to-date returns
-current instead of freezing them at the 0% they show on rebalance day. Each run:
-
-1. Builds the approximate Wikipedia historical S&P 500 membership file.
-2. Checks out `cozec/momentum_6month_claude` and runs the Nasdaq source
-   backtest to generate overlap exclusions.
-3. Runs the S&P 500 historical-membership backtest through the current date.
-4. Exports the dashboard to `public/`.
-5. Deploys `public/` to Cloudflare Pages with Wrangler direct upload.
-
-Add these GitHub repository secrets before enabling the workflow:
-
-```text
-CLOUDFLARE_ACCOUNT_ID
-CLOUDFLARE_API_TOKEN
-CLOUDFLARE_PAGES_PROJECT_NAME
-```
-
-The Cloudflare API token needs `Account > Cloudflare Pages > Edit` permission.
-If the Nasdaq repo is private, also add `NASDAQ_REPO_TOKEN` with read access to
-`cozec/momentum_6month_claude`; public repos do not need this extra token.
-You can also run the workflow manually from GitHub Actions, optionally passing
-`end_date` to rebuild the dashboard as of an earlier date.
 
 Useful CLI options:
 
@@ -361,6 +331,6 @@ This is a research tool, not trading advice. Important limitations include:
 - Yahoo Finance data quality constraints
 - taxes are not modeled
 - liquidity constraints are not modeled
-- execution uses adjusted close on rebalance dates
+- execution uses the adjusted open on rebalance dates (decided on the prior close)
 - transaction cost and slippage assumptions are simplified
 - concentrated top-3 portfolios can have high idiosyncratic risk
